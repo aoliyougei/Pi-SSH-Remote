@@ -1,0 +1,524 @@
+# Pi Extensions
+
+**Repository release: `v0.6.0-remote-resources.4`**
+
+The repository release version follows `@aoliyougei/pi-ssh-remote`; shared packages and companion extensions retain their own package versions.
+
+[![CI](https://github.com/aoliyougei/Pi-SSH-Remote/actions/workflows/ci.yml/badge.svg)](https://github.com/aoliyougei/Pi-SSH-Remote/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/github/license/aoliyougei/pi-extensions)](LICENSE)
+
+A focused collection of extensions for the [Pi coding agent](https://pi.dev/).
+Add background tasks, cross-platform remote SSH workspaces, Codex subscription
+tools, cursor effects, folded reasoning, or a compact todo workflow without
+installing an all-in-one bundle.
+
+Every extension is published and versioned independently. Install only the
+capabilities you need.
+
+## Contents
+
+- [Packages](#packages)
+- [Quick start](#quick-start)
+- [Compatibility](#compatibility)
+- [Extension guide](#extension-guide)
+- [Shared infrastructure](#shared-infrastructure)
+- [Development](#development)
+- [Publishing](#publishing)
+- [Uninstall](#uninstall)
+
+## Packages
+
+### Extensions
+
+| Extension | npm | What it adds |
+| --- | --- | --- |
+| [Background Tasks](extensions/background-tasks/README.md) | [![background-tasks](https://img.shields.io/npm/v/%40aoliyougei%2Fpi-background-tasks?label=background-tasks)](https://www.npmjs.com/package/@aoliyougei/pi-background-tasks) | Pipe and PTY background tasks with attach, logs, waits, input, signals, and local or SSH-backed execution |
+| [Codex API](extensions/codex-api/README.md) | [![codex-api](https://img.shields.io/npm/v/%40aoliyougei%2Fpi-codex-api?label=codex-api)](https://www.npmjs.com/package/@aoliyougei/pi-codex-api) | Codex OAuth text/vision delegation, image generation, search, Fast mode, and subscription usage |
+| [Cursor Effect](extensions/cursor-effect/README.md) | [![cursor-effect](https://img.shields.io/npm/v/%40aoliyougei%2Fpi-cursor-effect?label=cursor-effect)](https://www.npmjs.com/package/@aoliyougei/pi-cursor-effect) | Configurable effects for Pi's working, retry, compaction, and branch-summary cursors |
+| [DeepSeek Anchor](extensions/deepseek-anchor/README.md) | [![deepseek-anchor](https://img.shields.io/npm/v/%40aoliyougei%2Fpi-deepseek-anchor?label=deepseek-anchor)](https://www.npmjs.com/package/@aoliyougei/pi-deepseek-anchor) | Simulate DSH minimal mode's first request to induce a stronger DeepSeek V4 Pro agent trajectory |
+| [SSH Remote](extensions/ssh-remote/README.md) | [![ssh-remote](https://img.shields.io/npm/v/%40aoliyougei%2Fpi-ssh-remote?label=ssh-remote)](https://www.npmjs.com/package/@aoliyougei/pi-ssh-remote) | Remote Unix or Windows workspaces through reusable OpenSSH or `ssh2` transports |
+| [Thinking Fold](extensions/thinking-fold/README.md) | [![thinking-fold](https://img.shields.io/npm/v/%40aoliyougei%2Fpi-thinking-fold?label=thinking-fold)](https://www.npmjs.com/package/@aoliyougei/pi-thinking-fold) | Timed, collapsible live-tail previews for long reasoning traces |
+| [Todo](extensions/todo/README.md) | [![todo](https://img.shields.io/npm/v/%40aoliyougei%2Fpi-todo?label=todo)](https://www.npmjs.com/package/@aoliyougei/pi-todo) | Atomic whole-plan updates, dependencies, reminders, and a read-only TUI widget |
+
+### Shared libraries
+
+| Library | npm | Purpose |
+| --- | --- | --- |
+| [`@aoliyougei/pi-shared-settings`](packages/shared-settings/README.md) | [![shared-settings](https://img.shields.io/npm/v/%40aoliyougei%2Fpi-shared-settings?label=shared-settings)](https://www.npmjs.com/package/@aoliyougei/pi-shared-settings) | Shared `/aoliyougei-settings` menu and namespaced settings store |
+| [`@aoliyougei/pi-workspace-files`](packages/workspace-files/README.md) | [![workspace-files](https://img.shields.io/npm/v/%40aoliyougei%2Fpi-workspace-files?label=workspace-files)](https://www.npmjs.com/package/@aoliyougei/pi-workspace-files) | Binary workspace I/O protocol shared by Codex API and SSH Remote |
+
+The shared libraries are runtime dependencies, not Pi extensions. They register
+no tools or commands on their own.
+
+## Quick start
+
+### Install SSH Remote from this GitHub repository
+
+The repository root is a Pi Git package that loads only SSH Remote:
+
+```bash
+pi install https://github.com/aoliyougei/Pi-SSH-Remote
+```
+
+Linux, Windows, and macOS installs use the same Git source. SSH Remote supports
+Unix and Windows remote workspaces internally; no separate PowerShell extension
+is required.
+
+### Install independently published packages
+
+Choose one or more packages:
+
+```bash
+pi install npm:@aoliyougei/pi-background-tasks
+pi install npm:@aoliyougei/pi-codex-api
+pi install npm:@aoliyougei/pi-cursor-effect
+pi install npm:@aoliyougei/pi-deepseek-anchor
+pi install npm:@aoliyougei/pi-ssh-remote
+pi install npm:@aoliyougei/pi-thinking-fold
+pi install npm:@aoliyougei/pi-todo
+```
+
+SSH Remote supports Windows clients and Windows remote hosts internally; no separate local shell extension is required.
+
+### Common setups
+
+#### Remote workspace with attachable PTY tasks
+
+```bash
+pi install npm:@aoliyougei/pi-background-tasks
+pi install npm:@aoliyougei/pi-ssh-remote
+pi --ssh devbox:/srv/project
+```
+
+SSH Remote uses your existing OpenSSH aliases and credentials. The same
+Background Tasks workflow can then run `htop`, `lazygit`, `nvim`, or another TUI
+on the remote host without leaving the current Pi conversation.
+
+#### Codex subscription tools
+
+```bash
+pi install npm:@aoliyougei/pi-codex-api
+```
+
+Sign in to Pi's `openai-codex` provider. No OpenAI API key or MCP server is
+required. To use the tools while another provider is active, enable **Other
+providers** in `/aoliyougei-settings`.
+
+#### Todo replacement
+
+Remove another extension that owns the same `todo` tool before installing this
+one:
+
+```bash
+pi remove npm:@juicesharp/rpiv-todo
+pi install npm:@aoliyougei/pi-todo
+```
+
+#### DeepSeek first-request anchoring
+
+```bash
+pi install npm:@aoliyougei/pi-deepseek-anchor
+```
+
+Start a fresh `deepseek/deepseek-v4-pro` session. The extension simulates DSH
+minimal mode's first-request scaffold to induce a more effective tool-use
+trajectory. The default Pi-native profile keeps a one-sentence system anchor
+for the session, starts with `bash` and `edit`, then restores the full tool set
+after the bootstrap tool batch. A POSIX-only `exact-dsh` profile adds the
+DSH-compatible persistent Bash and
+`str_replace_editor` schemas for the bootstrap request. Configure the profile,
+mode, scope, and native tools through the shared `/aoliyougei-settings` menu; DeepSeek
+Anchor adds no private slash command.
+
+### Configure installed extensions
+
+Open the shared settings menu:
+
+```text
+/aoliyougei-settings
+```
+
+Only installed extensions that expose settings appear in the menu.
+
+## Compatibility
+
+Background Control protocol v2 integrations require this minimum set:
+
+| Package | Minimum version |
+| --- | --- |
+| `@aoliyougei/pi-background-tasks` | `2.0.0` |
+| `@aoliyougei/pi-ssh-remote` | `0.5.0` |
+| `@aoliyougei/optional shell adapter` | `1.1.0` |
+
+only when those integrations are installed. Background Tasks 2.x rejects
+unnamed protocol-v1 providers so an active remote workspace cannot silently
+fall back to a local process.
+
+## Extension guide
+
+### Background Tasks
+
+Run intentionally asynchronous finite commands, long-lived services, and
+interactive terminal programs without blocking the foreground Pi session.
+Use background execution only when the user requests it, the process must remain
+available for later interaction, or Pi can do useful independent work while it
+runs. A command being slow is not enough by itself; when its result is required
+before work can continue, use foreground `bash` with an appropriate timeout.
+
+| Tool | Purpose |
+| --- | --- |
+| `bg_start` | Start a pipe or PTY task |
+| `bg_wait` | Wait once for a finite task and return its latest pipe log line |
+| `bg_status` | Inspect task state, launch metadata, and latest pipe log line |
+| `bg_logs` | Read full retained pipe or PTY output |
+| `bg_send` | Send text, terminal keys, EOF, or an execution-environment signal |
+| `bg_kill` | Terminate a running or disconnected adapter-owned task |
+
+User commands:
+
+- `/bg-attach <id>` attaches to a PTY or follows new pipe output. Press
+  `Ctrl+]` to detach.
+- `/bg-kill` selects and terminates a running task.
+
+Task names can be used anywhere an ID is accepted. Same-task calls emitted in
+one model response execute in source order, while independent task chains run
+in parallel. PTY support uses `node-pty`; systems without a compatible native
+binary may require a C/C++ toolchain.
+
+[Read the Background Tasks documentation →](extensions/background-tasks/README.md)
+
+### SSH Remote
+
+Keep Pi local while routing workspace operations to a remote Unix or Windows
+host. SSH Remote handles:
+
+- `read`, `write`, `edit`, and `bash`;
+- optional `grep`, `find`, and `ls` tools;
+- user `!` and `!!` commands;
+- binary workspace files used by Codex API;
+- Background Tasks PTY and signal control.
+
+Auto transport selection uses managed OpenSSH multiplexing on Linux and macOS,
+and a persistent `ssh2` connection with OpenSSH compatibility fallback on
+Windows. Both transports support `ProxyJump`; explicit OpenSSH mode also keeps
+native `ProxyCommand` behavior.
+
+Session state records the target, remote platform, shell, and cwd. Resume and
+branch navigation restore that state transactionally, while failures block
+remote tools instead of falling back to Pi's local workspace.
+
+For local Pi-Web projects, SSH Remote can also maintain a strict, verified code
+mirror on a saved test server while keeping all code tools local. Local changes
+sync after a short debounce; `ssh_exec` waits for the verified mirror before
+running remote builds or tests, and does not switch the workspace. Configure
+saved servers and mappings with `/ssh`; use `/ssh-sync` for a forced pass.
+
+| Command | Purpose |
+| --- | --- |
+| `/ssh-connect <target>` | Connect or switch directly to another SSH target |
+| `/ssh-cd <path>` | Change the persistent remote cwd without reconnecting |
+| `/ssh-status` | Show the current local or remote environment |
+| `/ssh-reconnect` | Reconnect the active target |
+| `/ssh-exit` | Return explicitly to the local workspace |
+| `/ssh-forget-password [all]` | Remove cached password entries |
+| `/ssh` | Manage saved execution servers and local project mappings |
+| `/ssh-sync` | Force strict mirror synchronization and verification |
+
+Model-facing environment controls are disabled by default. Model-triggered
+password input has a 60-second deadline; manual connections can wait until the
+user responds.
+
+[Read the SSH Remote documentation →](extensions/ssh-remote/README.md)
+
+
+This Windows-only extension:
+
+- prefers PowerShell 7 (`pwsh.exe`);
+- falls back to Windows PowerShell 5.1 (`powershell.exe`);
+- routes Pi's Bash backend and Background Tasks through the same runtime;
+- configures UTF-8 input and output;
+- preserves interactive PTY behavior.
+
+Without the adapter, Background Tasks follows Pi's configured Bash resolution,
+including Git Bash on Windows.
+
+
+### DeepSeek Anchor
+
+Simulate DSH minimal mode's RL-aligned first request to place DeepSeek V4 Pro
+on a more effective agent trajectory without keeping the whole session on a
+two-tool catalog. Anchored mode keeps the profile's complete system prompt on
+every request, while restoring Pi's full
+tool set after the bootstrap tool batch. The default profile preserves Pi's
+normal Bash and editor implementations; the opt-in `exact-dsh` profile fixes
+the bootstrap schemas and uses a persistent local Bash process on POSIX during
+bootstrap. Profile/model gates are branch-aware, anchored phase survives
+reload, non-target models never lose tools, and non-`max` thinking is warned
+about rather than changed automatically. Settings apply immediately through
+`/aoliyougei-settings`; no extension-specific slash command is registered.
+
+This is an experimental client scaffold, not a performance guarantee, hidden
+chain-of-thought extractor, or server-route selector.
+
+[Read the DeepSeek Anchor documentation →](extensions/deepseek-anchor/README.md) ·
+[中文文档 →](extensions/deepseek-anchor/README.zh-CN.md)
+
+### Codex API
+
+Use a ChatGPT Codex subscription from Pi without an API key.
+
+| Tool or command | Purpose |
+| --- | --- |
+| `codex_ask` | Ask a live Codex model for an explicit multilingual text or vision second opinion |
+| `codex_image` | Generate or edit images and save non-overwriting PNG outputs |
+| `codex_search` | Search web/images, navigate pages, capture PDF pages, and query finance, weather, sports, or time data |
+| `/codex-usage` | Show quota, plan information, and reset cards |
+| `/codex-redeem` | Confirm and redeem an available reset card |
+
+The usage commands appear only after Pi confirms an `openai-codex` OAuth login.
+`codex_ask` requires Pi 0.84.1 or newer and uses Pi's model registry rather than
+a duplicate model catalog. Use the **Tools** submenu in `/aoliyougei-settings` to toggle
+Search, Image, and Ask Codex. Fast mode, Usage monitor, and Answer detail remain
+direct Codex API settings. When SSH Remote is active, generated files and image
+references use the remote binary workspace provider instead of a local staging
+directory.
+
+[Read the Codex API documentation →](extensions/codex-api/README.md)
+
+### Cursor Effect
+
+Style Pi's main working, retry, compaction, and branch-summary cursors without
+changing tool loaders, widgets, messages, or model events. Built-in themes
+include Default, Claude Code, and Codex; Custom mode exposes independent loader
+and label controls.
+
+[Read the Cursor Effect documentation →](extensions/cursor-effect/README.md)
+
+### Thinking Fold
+
+Long reasoning traces render beneath a once-per-second timed header. The live
+view keeps a compact tail, completed thinking defaults to `Thought for xx.xs`,
+and `Ctrl+T` restores the full original reasoning. Display-only patches never
+alter persisted messages or reasoning signatures.
+
+[Read the Thinking Fold documentation →](extensions/thinking-fold/README.md)
+
+### Todo
+
+The `todo` tool writes one authoritative `tasks[]` snapshot instead of issuing
+per-task CRUD calls. It supports:
+
+- stable model-facing keys and same-call dependencies;
+- sparse updates for existing tasks;
+- stale-revision and dependency-graph validation;
+- omission-based deletion with no archive or cancelled state;
+- branch-aware persistence and compaction checkpoints;
+- a read-only widget with configurable reminders.
+
+Completed tasks remain visible for the current response and are removed before
+the next response unless unfinished work still depends on them.
+
+[Read the Todo documentation →](extensions/todo/README.md)
+
+## Shared infrastructure
+
+### Shared settings
+
+Configurable extensions share one atomically written file:
+
+```text
+~/.pi/agent/99extensions.json
+```
+
+| Namespace | Main settings |
+| --- | --- |
+| `background-tasks` | Collapsed task count and output previews |
+| `codex-api` | Tool switches, Answer detail, Fast mode, usage monitoring, provider access, search, and image quality |
+| `cursor-effect` | Themes and custom loader/label effects |
+| `deepseek-anchor` | Profile, mode, anchor scope, and bootstrap tools |
+| `ssh-remote` | Transport, password behavior, and AI controls |
+| `thinking-fold` | Fold threshold and streaming/completed display behavior |
+| `todo` | Widget size, dependency numbers, and reminder interval |
+
+<details>
+<summary>Example <code>99extensions.json</code></summary>
+
+```json
+{
+  "background-tasks": {
+    "collapsedTaskLimit": 0,
+    "outputPreview": "finished"
+  },
+  "codex-api": {
+    "searchEnabled": true,
+    "imageEnabled": true,
+    "askEnabled": true,
+    "fastMode": false,
+    "responseVerbosity": "auto",
+    "usageStatus": true,
+    "allowOtherProviders": false,
+    "searchMode": "auto"
+  },
+  "deepseek-anchor": {
+    "version": 1,
+    "profile": "pi-native",
+    "mode": "anchored",
+    "scope": "session",
+    "targetProvider": "deepseek",
+    "targetModelId": "deepseek-v4-pro",
+    "nativeBootstrapTools": ["bash", "edit"],
+    "nativeSystemPrompt": "You are a helpful software engineer assistant."
+  },
+  "ssh-remote": {
+    "transport": "auto"
+  },
+  "thinking-fold": {
+    "foldThreshold": 5,
+    "streamingBehavior": "auto",
+    "completedBehavior": "auto"
+  },
+  "todo": {
+    "collapsedTaskLimit": 3,
+    "showDependencyNumbers": true,
+    "reminderInterval": 3
+  }
+}
+```
+
+</details>
+
+### Workspace files
+
+`@aoliyougei/pi-workspace-files` defines the binary workspace I/O protocol
+used by Codex API and SSH Remote. Consumers request the active file system and
+fall back to a workspace-confined local Node.js backend when no remote provider
+claims it.
+
+The protocol covers native path resolution, buffered or streaming binary
+reads/writes, directory creation, existence checks, and cancellation.
+
+[Read the Workspace Files documentation →](packages/workspace-files/README.md)
+
+## Development
+
+The repository is a private Bun 1.3.14 workspace containing independently
+published source packages.
+
+### Install, build, and test
+
+```bash
+bun install --frozen-lockfile
+bun run build:all
+bun run check
+bun run pack:check
+```
+
+`bun run check` runs the privacy scanner, strict TypeScript checking, and the
+unit/integration test suite. The privacy scanner rejects developer-specific
+paths, accounts, hosts, emails, private IPs, and credential-shaped material in
+committed test and e2e fixtures.
+
+### Build output
+
+Builds never create package-local `dist/` directories. Each complete npm staging
+package is generated under the repository root:
+
+```text
+dist/<package-name>/
+├── index.min.js
+├── index.min.js.map
+├── package.json
+├── README.md
+└── LICENSE
+```
+
+Shared libraries additionally include declarations; package-specific skills or
+JSON assets are copied beside the runtime entrypoint. Root `dist/` is ignored by
+Git and rebuilt from release tags.
+
+Pi core peers and all npm runtime dependencies remain external. This preserves
+Pi's peer-module identity and lets native or dynamic dependencies use their
+normal package loaders.
+
+### Load source directly
+
+```bash
+pi -e ./extensions/background-tasks/index.ts
+pi -e ./extensions/codex-api/index.ts
+pi -e ./extensions/cursor-effect/index.ts
+pi -e ./extensions/deepseek-anchor/index.ts
+pi -e ./extensions/ssh-remote/index.ts --ssh devbox:/srv/project
+pi -e ./extensions/thinking-fold/index.ts
+pi -e ./extensions/todo/index.ts
+```
+
+### Repository layout
+
+| Path | Contents |
+| --- | --- |
+| `extensions/` | Eight independently published Pi extensions |
+| `packages/` | Shared settings and workspace-file runtime libraries |
+| `tests/` | Unit and optional live integration tests |
+| `scripts/` | Build, privacy, and package validation scripts |
+| `promo/` | Demo assets used by package documentation |
+
+Windows SSH integration requires a live test host. See
+[`tests/README.md`](tests/README.md) for the integration suite.
+
+## Publishing
+
+[`.github/workflows/publish.yml`](.github/workflows/publish.yml) publishes only
+from package-specific tags through npm Trusted Publishing and GitHub Actions
+OIDC. No `NPM_TOKEN` is required.
+
+Configure a Trusted Publisher separately for all ten npm packages:
+
+- **Provider:** GitHub Actions
+- **Organization or user:** `aoliyougei`
+- **Repository:** `pi-extensions`
+- **Workflow filename:** `publish.yml`
+- **Allowed action:** `npm publish`
+
+Tags use the source directory name followed by the exact package version:
+
+```text
+background-tasks-v2.1.0
+codex-api-v0.2.9
+deepseek-anchor-v0.1.0
+ssh-remote-v0.5.3
+workspace-files-v0.1.1
+```
+
+To release a package:
+
+1. Update its source `package.json` version and any internal dependency pins.
+2. Update package documentation when behavior changed.
+3. Run `bun run pack:check`.
+4. Commit and push the release changes.
+5. Create and push the matching tag.
+
+```bash
+git tag ssh-remote-v0.5.3
+git push origin master ssh-remote-v0.5.3
+```
+
+Publish shared libraries before extensions that require their new versions. The
+workflow rejects tags that do not exactly match the selected package's
+`package.json`.
+
+## Uninstall
+
+```bash
+pi remove npm:@aoliyougei/pi-background-tasks
+pi remove npm:@aoliyougei/pi-codex-api
+pi remove npm:@aoliyougei/pi-cursor-effect
+pi remove npm:@aoliyougei/optional shell adapter
+pi remove npm:@aoliyougei/pi-deepseek-anchor
+pi remove npm:@aoliyougei/pi-ssh-remote
+pi remove npm:@aoliyougei/pi-thinking-fold
+pi remove npm:@aoliyougei/pi-todo
+```
+
+## License
+
+[MIT](LICENSE)

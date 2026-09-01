@@ -1,0 +1,36 @@
+{
+  "name": "@aoliyougei/pi-shared-settings",
+  "version": "0.1.4",
+  "private": true,
+  "description": "Shared namespaced settings store and installed-extension menu for @aoliyougei Pi packages",
+  "type": "module",
+  "main": "./index.ts",
+  "types": "./index.ts",
+  "scripts": {
+    "build": "bun run ../../scripts/build-package.ts"
+  },
+  "keywords": [
+    "pi",
+    "coding-agent",
+    "settings",
+    "extension"
+  ],
+  "author": "aoliyougei",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/aoliyougei/Pi-SSH-Remote.git",
+    "directory": "packages/shared-settings"
+  },
+  "bugs": {
+    "url": "https://github.com/aoliyougei/Pi-SSH-Remote/issues"
+  },
+  "publishConfig": {
+    "access": "public",
+    "registry": "https://registry.npmjs.org/"
+  },
+  "peerDependencies": {
+    "@earendil-works/pi-coding-agent": "*",
+    "@earendil-works/pi-tui": "*"
+  }
+}

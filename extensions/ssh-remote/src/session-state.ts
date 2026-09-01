@@ -1,0 +1,165 @@
+import { win32 } from "node:path";
+import type { RemotePlatform, RemoteShell } from "./adapters/types.ts";
+
+export const SSH_SESSION_STATE_TYPE = "pi-ssh-remote-state";
+export const SSH_SESSION_STATE_VERSION = 2 as const;
+export const SSH_LOCAL_SESSION_STATE_TYPE = "pi-ssh-local-state";
+export const SSH_LOCAL_SESSION_STATE_VERSION = 1 as const;
+
+export interface SshSessionState {
+  version: typeof SSH_SESSION_STATE_VERSION;
+  target: string;
+  port?: number;
+  remotePlatform: RemotePlatform;
+  remoteShell: RemoteShell;
+  remoteCwd: string;
+  remoteHome: string;
+  requestedCwd?: string;
+  configFile?: string;
+}
+
+export interface SshLocalSessionState {
+  version: typeof SSH_LOCAL_SESSION_STATE_VERSION;
+}
+
+export type SshEnvironmentState =
+  | { mode: "remote"; session: SshSessionState }
+  | { mode: "local"; state: SshLocalSessionState };
+
+export const SSH_LOCAL_SESSION_STATE: SshLocalSessionState = {
+  version: SSH_LOCAL_SESSION_STATE_VERSION,
+};
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return !!value && typeof value === "object" && !Array.isArray(value);
+}
+
+function isSafeOptionalString(value: unknown): value is string | undefined {
+  return value === undefined || (typeof value === "string" && !/[\0\r\n]/.test(value));
+}
+
+function isSafeOptionalPort(value: unknown): value is number | undefined {
+  return value === undefined
+    || (
+      typeof value === "number"
+      && Number.isInteger(value)
+      && value >= 1
+      && value <= 65_535
+    );
+}
+
+function isValidTarget(value: unknown): value is string {
+  return typeof value === "string"
+    && value.length > 0
+    && !value.startsWith("-")
+    && !/[\s\0\r\n]/.test(value);
+}
+
+function isValidUnixPath(value: string): boolean {
+  return value.startsWith("/") && !/[\0\r\n]/.test(value);
+}
+
+function isValidWindowsPath(value: string): boolean {
+  const fullyQualified = /^[A-Za-z]:[\\/]/.test(value) || /^\\\\[^\\]/.test(value);
+  return fullyQualified && win32.isAbsolute(value) && !/[\0\r\n]/.test(value);
+}
+
+function commonFieldsAreValid(value: Record<string, unknown>): boolean {
+  return isValidTarget(value.target)
+    && isSafeOptionalPort(value.port)
+    && typeof value.remoteCwd === "string"
+    && typeof value.remoteHome === "string"
+    && isSafeOptionalString(value.requestedCwd)
+    && isSafeOptionalString(value.configFile);
+}
+
+export function normalizeSshSessionState(value: unknown): SshSessionState | undefined {
+  if (!isRecord(value) || !commonFieldsAreValid(value)) return undefined;
+
+  // Version 1 represented Unix/Bash sessions implicitly. Normalize them to v2
+  // in memory so existing conversations resume without a migration entry.
+  if (value.version === 1) {
+    if (!isValidUnixPath(value.remoteCwd as string) || !isValidUnixPath(value.remoteHome as string)) {
+      return undefined;
+    }
+    return {
+      version: SSH_SESSION_STATE_VERSION,
+      target: value.target as string,
+      remotePlatform: "unix",
+      remoteShell: "bash",
+      remoteCwd: value.remoteCwd as string,
+      remoteHome: value.remoteHome as string,
+      requestedCwd: value.requestedCwd as string | undefined,
+      configFile: value.configFile as string | undefined,
+    };
+  }
+
+  if (value.version !== SSH_SESSION_STATE_VERSION) return undefined;
+  if (value.remotePlatform !== "unix" && value.remotePlatform !== "windows") return undefined;
+  if (value.remotePlatform === "unix") {
+    if (value.remoteShell !== "bash" && value.remoteShell !== "zsh" && value.remoteShell !== "sh") {
+      return undefined;
+    }
+    if (!isValidUnixPath(value.remoteCwd as string) || !isValidUnixPath(value.remoteHome as string)) {
+      return undefined;
+    }
+  } else {
+    if (value.remoteShell !== "pwsh" && value.remoteShell !== "powershell") {
+      return undefined;
+    }
+    if (!isValidWindowsPath(value.remoteCwd as string) || !isValidWindowsPath(value.remoteHome as string)) {
+      return undefined;
+    }
+  }
+
+  return {
+    version: SSH_SESSION_STATE_VERSION,
+    target: value.target as string,
+    port: value.port as number | undefined,
+    remotePlatform: value.remotePlatform,
+    remoteShell: value.remoteShell,
+    remoteCwd: value.remoteCwd as string,
+    remoteHome: value.remoteHome as string,
+    requestedCwd: value.requestedCwd as string | undefined,
+    configFile: value.configFile as string | undefined,
+  };
+}
+
+export function findSshEnvironmentState(
+  entries: readonly unknown[],
+): SshEnvironmentState | undefined {
+  for (let index = entries.length - 1; index >= 0; index -= 1) {
+    const entry = entries[index];
+    if (!isRecord(entry) || entry.type !== "custom") continue;
+
+    if (entry.customType === SSH_LOCAL_SESSION_STATE_TYPE) {
+      if (
+        isRecord(entry.data)
+        && entry.data.version === SSH_LOCAL_SESSION_STATE_VERSION
+      ) {
+        return {
+          mode: "local",
+          state: { version: SSH_LOCAL_SESSION_STATE_VERSION },
+        };
+      }
+      continue;
+    }
+
+    if (entry.customType !== SSH_SESSION_STATE_TYPE) continue;
+    const session = normalizeSshSessionState(entry.data);
+    if (session) return { mode: "remote", session };
+  }
+  return undefined;
+}
+
+export function findSshSessionState(entries: readonly unknown[]): SshSessionState | undefined {
+  const environment = findSshEnvironmentState(entries);
+  return environment?.mode === "remote" ? environment.session : undefined;
+}
+
+export function formatRemoteLocation(
+  state: Pick<SshSessionState, "target" | "port" | "remoteCwd">,
+): string {
+  const port = state.port !== undefined ? `:${state.port}` : "";
+  return `${state.target}${port}:${state.remoteCwd}`;
+}

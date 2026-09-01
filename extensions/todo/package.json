@@ -1,0 +1,51 @@
+{
+  "name": "@aoliyougei/pi-todo",
+  "version": "1.2.7",
+  "private": true,
+  "description": "A minimal atomic todo tool with omission-based deletion, compaction-safe state, dependencies, and a read-only Pi widget",
+  "type": "module",
+  "scripts": {
+    "build": "bun run ../../scripts/build-package.ts"
+  },
+  "pi": {
+    "extensions": [
+      "./index.ts"
+    ]
+  },
+  "piBuild": {
+    "bundlePackages": [
+      "@aoliyougei/pi-shared-settings"
+    ]
+  },
+  "keywords": [
+    "pi-package",
+    "pi",
+    "coding-agent",
+    "todo",
+    "task-planning"
+  ],
+  "author": "aoliyougei",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/aoliyougei/Pi-SSH-Remote.git",
+    "directory": "extensions/todo"
+  },
+  "bugs": {
+    "url": "https://github.com/aoliyougei/Pi-SSH-Remote/issues"
+  },
+  "homepage": "https://github.com/aoliyougei/Pi-SSH-Remote#readme",
+  "publishConfig": {
+    "access": "public",
+    "registry": "https://registry.npmjs.org/"
+  },
+  "dependencies": {
+    "@aoliyougei/pi-shared-settings": "0.1.4"
+  },
+  "peerDependencies": {
+    "@earendil-works/pi-ai": "*",
+    "@earendil-works/pi-coding-agent": "*",
+    "@earendil-works/pi-tui": "*",
+    "typebox": "*"
+  }
+}

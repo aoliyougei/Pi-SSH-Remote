@@ -1,0 +1,36 @@
+{
+  "name": "@aoliyougei/pi-workspace-files",
+  "version": "0.1.2",
+  "private": true,
+  "description": "Composable binary workspace file-system protocol for Pi extensions",
+  "type": "module",
+  "main": "./index.ts",
+  "types": "./index.ts",
+  "scripts": {
+    "build": "bun run ../../scripts/build-package.ts"
+  },
+  "keywords": [
+    "pi",
+    "coding-agent",
+    "workspace",
+    "filesystem",
+    "extensions"
+  ],
+  "author": "aoliyougei",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/aoliyougei/Pi-SSH-Remote.git",
+    "directory": "packages/workspace-files"
+  },
+  "bugs": {
+    "url": "https://github.com/aoliyougei/Pi-SSH-Remote/issues"
+  },
+  "publishConfig": {
+    "access": "public",
+    "registry": "https://registry.npmjs.org/"
+  },
+  "peerDependencies": {
+    "@earendil-works/pi-coding-agent": "*"
+  }
+}

@@ -1,0 +1,98 @@
+name: Publish npm package
+
+on:
+  push:
+    tags:
+      - "background-tasks-v*"
+      - "codex-api-v*"
+      - "cursor-effect-v*"
+      - "deepseek-anchor-v*"
+      - "ssh-remote-v*"
+      - "thinking-fold-v*"
+      - "todo-v*"
+      - "shared-settings-v*"
+      - "workspace-files-v*"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: npm-publish-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+
+    steps:
+      - name: Check out release tag
+        uses: actions/checkout@v6
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: "24"
+          registry-url: "https://registry.npmjs.org"
+          package-manager-cache: false
+
+      - name: Set up Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: "1.3.14"
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Resolve package and verify tag
+        id: release
+        env:
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: |
+          node <<'NODE'
+          const fs = require("node:fs");
+
+          const tag = process.env.RELEASE_TAG;
+          const releases = [
+            { prefix: "background-tasks-v", directory: "extensions/background-tasks" },
+            { prefix: "codex-api-v", directory: "extensions/codex-api" },
+            { prefix: "cursor-effect-v", directory: "extensions/cursor-effect" },
+            { prefix: "deepseek-anchor-v", directory: "extensions/deepseek-anchor" },
+            { prefix: "ssh-remote-v", directory: "extensions/ssh-remote" },
+            { prefix: "thinking-fold-v", directory: "extensions/thinking-fold" },
+            { prefix: "todo-v", directory: "extensions/todo" },
+            { prefix: "shared-settings-v", directory: "packages/shared-settings" },
+            { prefix: "workspace-files-v", directory: "packages/workspace-files" },
+          ];
+          const release = releases.find(({ prefix }) => tag.startsWith(prefix));
+          if (!release) throw new Error(`Unsupported release tag: ${tag}`);
+
+          const tagVersion = tag.slice(release.prefix.length);
+          const packageJson = JSON.parse(
+            fs.readFileSync(`${release.directory}/package.json`, "utf8"),
+          );
+          if (tagVersion !== packageJson.version) {
+            throw new Error(
+              `Tag version ${tagVersion} does not match ${packageJson.name}@${packageJson.version}`,
+            );
+          }
+
+          fs.appendFileSync(
+            process.env.GITHUB_OUTPUT,
+            `directory=${release.directory}\nartifact=${release.directory.split("/").at(-1)}\nname=${packageJson.name}\nversion=${packageJson.version}\n`,
+          );
+          NODE
+
+      - name: Validate release source
+        run: bun run check
+
+      - name: Build publish staging package
+        run: bun run --cwd ${{ steps.release.outputs.directory }} build
+
+      - name: Validate publish tarball
+        run: bun pm pack --dry-run --cwd dist/${{ steps.release.outputs.artifact }}
+
+      - name: Publish ${{ steps.release.outputs.name }}@${{ steps.release.outputs.version }}
+        run: npm publish --access public ./dist/${{ steps.release.outputs.artifact }}

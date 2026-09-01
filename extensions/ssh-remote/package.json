@@ -1,0 +1,57 @@
+{
+  "name": "@aoliyougei/pi-ssh-remote",
+  "version": "0.6.0-remote-resources.4",
+  "private": true,
+  "description": "Route Pi's file and shell tools to remote Unix or Windows workspaces through reusable OpenSSH or ssh2 transports",
+  "type": "module",
+  "scripts": {
+    "build": "bun run ../../scripts/build-package.ts"
+  },
+  "pi": {
+    "extensions": [
+      "./index.ts"
+    ]
+  },
+  "piBuild": {
+    "bundlePackages": [
+      "@aoliyougei/pi-shared-settings",
+      "@aoliyougei/pi-workspace-files"
+    ]
+  },
+  "keywords": [
+    "pi-package",
+    "pi",
+    "coding-agent",
+    "ssh",
+    "remote-development",
+    "openssh",
+    "ssh2",
+    "background-tasks",
+    "pty",
+    "tui"
+  ],
+  "author": "aoliyougei",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/aoliyougei/Pi-SSH-Remote.git",
+    "directory": "extensions/ssh-remote"
+  },
+  "bugs": {
+    "url": "https://github.com/aoliyougei/Pi-SSH-Remote/issues"
+  },
+  "homepage": "https://github.com/aoliyougei/Pi-SSH-Remote#readme",
+  "publishConfig": {
+    "access": "public",
+    "registry": "https://registry.npmjs.org"
+  },
+  "dependencies": {
+    "@aoliyougei/pi-shared-settings": "0.1.4",
+    "@aoliyougei/pi-workspace-files": "0.1.2",
+    "ssh2": "1.17.0"
+  },
+  "peerDependencies": {
+    "@earendil-works/pi-coding-agent": "*",
+    "@earendil-works/pi-tui": "*"
+  }
+}

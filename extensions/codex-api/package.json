@@ -1,0 +1,63 @@
+{
+  "name": "@aoliyougei/pi-codex-api",
+  "version": "0.3.2",
+  "private": true,
+  "description": "Expose Codex subscription text, vision, image, search, Fast, and usage APIs to Pi",
+  "type": "module",
+  "scripts": {
+    "build": "bun run ../../scripts/build-package.ts"
+  },
+  "pi": {
+    "extensions": [
+      "./index.ts"
+    ],
+    "skills": [
+      "./skills"
+    ]
+  },
+  "piBuild": {
+    "assets": [
+      "skills"
+    ],
+    "bundlePackages": [
+      "@aoliyougei/pi-shared-settings",
+      "@aoliyougei/pi-workspace-files"
+    ]
+  },
+  "keywords": [
+    "pi-package",
+    "pi",
+    "coding-agent",
+    "codex",
+    "chatgpt",
+    "multilingual",
+    "second-opinion",
+    "image-generation",
+    "web-search"
+  ],
+  "author": "aoliyougei",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/aoliyougei/Pi-SSH-Remote.git",
+    "directory": "extensions/codex-api"
+  },
+  "bugs": {
+    "url": "https://github.com/aoliyougei/Pi-SSH-Remote/issues"
+  },
+  "homepage": "https://github.com/aoliyougei/Pi-SSH-Remote#readme",
+  "publishConfig": {
+    "access": "public",
+    "registry": "https://registry.npmjs.org/"
+  },
+  "dependencies": {
+    "@aoliyougei/pi-shared-settings": "0.1.4",
+    "@aoliyougei/pi-workspace-files": "0.1.2"
+  },
+  "peerDependencies": {
+    "@earendil-works/pi-ai": "*",
+    "@earendil-works/pi-coding-agent": "*",
+    "@earendil-works/pi-tui": "*",
+    "typebox": "*"
+  }
+}

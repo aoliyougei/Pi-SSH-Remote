@@ -1,0 +1,50 @@
+{
+  "name": "@aoliyougei/pi-cursor-effect",
+  "version": "0.1.6",
+  "private": true,
+  "description": "Apply selectable visual effects to Pi's main working cursor status",
+  "type": "module",
+  "scripts": {
+    "build": "bun run ../../scripts/build-package.ts"
+  },
+  "pi": {
+    "extensions": [
+      "./index.ts"
+    ]
+  },
+  "piBuild": {
+    "bundlePackages": [
+      "@aoliyougei/pi-shared-settings"
+    ]
+  },
+  "keywords": [
+    "pi-package",
+    "pi",
+    "coding-agent",
+    "cursor",
+    "animation",
+    "tui"
+  ],
+  "author": "aoliyougei",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/aoliyougei/Pi-SSH-Remote.git",
+    "directory": "extensions/cursor-effect"
+  },
+  "bugs": {
+    "url": "https://github.com/aoliyougei/Pi-SSH-Remote/issues"
+  },
+  "homepage": "https://github.com/aoliyougei/Pi-SSH-Remote#readme",
+  "publishConfig": {
+    "access": "public",
+    "registry": "https://registry.npmjs.org/"
+  },
+  "dependencies": {
+    "@aoliyougei/pi-shared-settings": "0.1.4"
+  },
+  "peerDependencies": {
+    "@earendil-works/pi-coding-agent": "*",
+    "@earendil-works/pi-tui": "*"
+  }
+}

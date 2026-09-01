@@ -1,0 +1,54 @@
+{
+  "name": "@aoliyougei/pi-thinking-fold",
+  "version": "0.1.9",
+  "private": true,
+  "description": "Fold streaming reasoning into a live tail preview and expand it with Pi's thinking shortcut",
+  "type": "module",
+  "scripts": {
+    "build": "bun run ../../scripts/build-package.ts"
+  },
+  "pi": {
+    "extensions": [
+      "./index.ts"
+    ]
+  },
+  "piBuild": {
+    "assets": [
+      "model-behaviors.json"
+    ],
+    "bundlePackages": [
+      "@aoliyougei/pi-shared-settings"
+    ]
+  },
+  "keywords": [
+    "pi-package",
+    "pi",
+    "coding-agent",
+    "thinking",
+    "reasoning",
+    "tui"
+  ],
+  "author": "aoliyougei",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/aoliyougei/Pi-SSH-Remote.git",
+    "directory": "extensions/thinking-fold"
+  },
+  "bugs": {
+    "url": "https://github.com/aoliyougei/Pi-SSH-Remote/issues"
+  },
+  "homepage": "https://github.com/aoliyougei/Pi-SSH-Remote#readme",
+  "publishConfig": {
+    "access": "public",
+    "registry": "https://registry.npmjs.org/"
+  },
+  "dependencies": {
+    "@aoliyougei/pi-shared-settings": "0.1.4"
+  },
+  "peerDependencies": {
+    "@earendil-works/pi-ai": "*",
+    "@earendil-works/pi-coding-agent": "*",
+    "@earendil-works/pi-tui": "*"
+  }
+}
