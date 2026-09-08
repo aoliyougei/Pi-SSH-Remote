@@ -3702,7 +3702,16 @@ test("Unix background control handles immediate kill and TERM-to-KILL escalation
     );
     assert.equal((await waitForExit(kill)).code, 0);
     await ignoredExit;
-    assert.throws(() => process.kill(commandPid, 0));
+    let running = true;
+    try {
+      process.kill(commandPid, 0);
+      if (process.platform === "linux") {
+        running = readFileSync(`/proc/${commandPid}/stat`, "utf8").split(" ")[2] !== "Z";
+      }
+    } catch {
+      running = false;
+    }
+    assert.equal(running, false);
   } finally {
     if (commandPid > 0) {
       try {
@@ -4819,6 +4828,7 @@ test("extension routes @ completion to SSH and restores Pi completion on exit", 
     platform: "unix",
     shell: "sh",
     toToolPath: (path: string) => path,
+    fileExists: async () => false,
     listDirectory: async () => [{ name: "remote.ts", isDirectory: false }],
     findEntries: async () => [{ path: "remote.ts", isDirectory: false }],
     runShell: async () => 1,
