@@ -80,6 +80,24 @@ test("password resolver remembers selected passwords according to persistence", 
   } finally { rmSync(root, { recursive: true, force: true }); }
 });
 
+test("password servers use cached credentials even when password prompts are disabled", async () => {
+  const endpoint = { hostLabel: "deploy@devbox:22", username: "deploy", host: "devbox", port: 22 };
+  const resolver = new SshPasswordResolver({ persistPasswords: false, secretsPath: join(tmpdir(), "unused-secrets.json") });
+  resolver.rememberPassword(endpoint, "cached-test-value");
+  let provider: any;
+  const pool = new ServerConnectionPool({
+    passwordResolver: resolver,
+    passwordEnabled: () => false,
+    createClient: ((options: any, factory: any) => { provider = factory.passwordProvider; return { options, dispose: async () => {} }; }) as any,
+    selectRemote: async () => ({ adapter: {} as any, workspace: { platform: "unix", shell: "bash", home: "/home/deploy", cwd: "/home/deploy" } }),
+  });
+  const lease = await pool.acquire({ ...fixtureServer(), authenticationPreference: "password" }, ctx);
+  assert.equal(provider.cached(endpoint), "cached-test-value");
+  assert.equal(await provider.retry(endpoint), undefined);
+  await lease.release();
+  await pool.shutdown();
+});
+
 test("server pool passes saved authentication options to transport", async () => {
   let options: any;
   const pool = new ServerConnectionPool({

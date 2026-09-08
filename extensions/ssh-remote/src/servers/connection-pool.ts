@@ -83,9 +83,9 @@ export class ServerConnectionPool {
     }
   }
 
-  private passwordProvider(ctx: ExtensionContext): SshPasswordProvider | undefined {
-    if (!this.passwordEnabled()) { this.passwordResolver.setUI(undefined); return undefined; }
-    this.passwordResolver.setUI(ctx.hasUI ? {
+  private passwordProvider(ctx: ExtensionContext): SshPasswordProvider {
+    const promptsEnabled = this.passwordEnabled();
+    this.passwordResolver.setUI(promptsEnabled && ctx.hasUI ? {
       prompt: (title, controls) => ctx.ui.input(title, "请输入 SSH 密码", controls ? {
         timeout: controls.timeoutMs,
         signal: controls.signal,
@@ -94,10 +94,12 @@ export class ServerConnectionPool {
     } : undefined);
     return {
       cached: (endpoint) => this.passwordResolver.cachedPassword(endpoint),
-      retry: (endpoint, error) => this.passwordResolver.retryPassword(
-        endpoint,
-        error instanceof Error ? error.message : undefined,
-      ),
+      retry: (endpoint, error) => promptsEnabled
+        ? this.passwordResolver.retryPassword(
+            endpoint,
+            error instanceof Error ? error.message : undefined,
+          )
+        : Promise.resolve(undefined),
     };
   }
 
