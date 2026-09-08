@@ -1,11 +1,15 @@
 import assert from "node:assert/strict";
-import { mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
+import { generateKeyPairSync } from "node:crypto";
+import { existsSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
 import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
+import { registerSshManagementCommands } from "../extensions/ssh-remote/src/servers/commands.ts";
 import { ServerConnectionPool } from "../extensions/ssh-remote/src/servers/connection-pool.ts";
+import { getDefaultOpenSshConfigPath } from "../extensions/ssh-remote/src/servers/managed-key.ts";
 import { loadServerStore, normalizeServerStore, saveServerStore, UnsupportedStoreVersionError } from "../extensions/ssh-remote/src/servers/store.ts";
+import { ServerController } from "../extensions/ssh-remote/src/servers/controller.ts";
 import type { SavedSshServer } from "../extensions/ssh-remote/src/servers/types.ts";
 import { buildSshArguments } from "../extensions/ssh-remote/src/transport/client.ts";
 import { SshPasswordResolver } from "../extensions/ssh-remote/src/transport/password-resolver.ts";
@@ -115,6 +119,60 @@ test("server pool deduplicates setup and retires changed generations", async () 
   assert.ok(disposes >= 1);
   await c.release();
   await pool.shutdown();
+});
+
+test("/ssh add uses Chinese prompts, visible default config, and selected password", async () => {
+  let handler: ((args: string, ctx: any) => Promise<void>) | undefined;
+  const inputs = ["test-api", "测试服务器", "deploy@devbox", "", getDefaultOpenSshConfigPath(), "test-password"];
+  const prompts: Array<{ title: string; placeholder?: string }> = [];
+  const selections = ["密码认证", "auto（自动）", "auto（自动）"];
+  let remembered: { password: string; server: SavedSshServer } | undefined;
+  let saved: SavedSshServer | undefined;
+  registerSshManagementCommands({ registerCommand: (_name: string, command: any) => { handler = command.handler; } } as any, {
+    servers: new ServerController({ load: () => ({ version: 1, servers: [] }), save: (document) => { saved = document.servers[0]; } }),
+    mappings: { list: () => [] } as any,
+    connections: {
+      rememberPassword: async (server: SavedSshServer, password: string) => { remembered = { server, password }; },
+      acquire: async () => ({ client: { transport: "ssh2", reusesConnection: true }, workspace: { platform: "unix", shell: "bash", home: "/home/deploy", cwd: "/home/deploy" }, release: async () => {} }),
+    } as any,
+    isFullRemoteWorkspace: () => false,
+  });
+  await handler!("add", {
+    hasUI: true,
+    cwd: "/local/workspace",
+    waitForIdle: async () => {},
+    ui: {
+      input: async (title: string, placeholder?: string) => { prompts.push({ title, placeholder }); return inputs.shift(); },
+      select: async () => selections.shift(),
+      notify: () => {},
+    },
+  });
+  assert.equal(prompts[4].placeholder, getDefaultOpenSshConfigPath());
+  assert.equal(remembered?.password, "test-password");
+  assert.equal(saved?.authenticationPreference, "password");
+  assert.equal(saved?.identityFile, undefined);
+});
+
+test("/ssh add rolls back a staged managed key when connection testing fails", async () => {
+  let handler: ((args: string, ctx: any) => Promise<void>) | undefined;
+  const root = mkdtempSync(join(tmpdir(), "ssh-add-key-"));
+  const inputs = ["test-key", "", "deploy@devbox", "", getDefaultOpenSshConfigPath(), "managed_key"];
+  const selections = ["密钥认证", "auto（自动）", "auto（自动）"];
+  const key = generateKeyPairSync("rsa", { modulusLength: 2048 }).privateKey.export({ format: "pem", type: "pkcs1" }).toString();
+  try {
+    registerSshManagementCommands({ registerCommand: (_name: string, command: any) => { handler = command.handler; } } as any, {
+      servers: new ServerController({ load: () => ({ version: 1, servers: [] }), save: () => {} }),
+      mappings: { list: () => [] } as any,
+      connections: { acquire: async () => { throw new Error("connection refused"); } } as any,
+      isFullRemoteWorkspace: () => false,
+      managedKeyDirectory: root,
+    });
+    await handler!("add", { hasUI: true, cwd: "/local/workspace", waitForIdle: async () => {}, ui: {
+      input: async () => inputs.shift(), select: async () => selections.shift(), editor: async () => key,
+      confirm: async () => true, notify: () => {},
+    } });
+    assert.equal(existsSync(join(root, "managed_key")), false);
+  } finally { rmSync(root, { recursive: true, force: true }); }
 });
 
 test("server pool connection failure remains isolated", async () => {

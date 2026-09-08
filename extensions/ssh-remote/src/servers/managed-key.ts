@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { chmodSync, lstatSync, mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs";
-import { join, resolve } from "node:path";
+import { dirname, join, resolve } from "node:path";
 import { getAgentDir } from "@earendil-works/pi-coding-agent";
 import ssh2 from "ssh2";
 
@@ -19,6 +19,14 @@ export function getManagedSshDirectory(agentDir = getAgentDir()): string {
 
 export function getDefaultOpenSshConfigPath(agentDir = getAgentDir()): string {
   return join(getManagedSshDirectory(agentDir), "config");
+}
+
+export function getManagedKeyPath(fileName: string, directory = getManagedSshDirectory()): string {
+  return join(directory, validateManagedKeyName(fileName));
+}
+
+export function isManagedKeyPath(path: string, directory = getManagedSshDirectory()): boolean {
+  return dirname(resolve(path)) === resolve(directory);
 }
 
 export function validateManagedKeyName(value: string): string {
