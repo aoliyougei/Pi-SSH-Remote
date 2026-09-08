@@ -86,7 +86,7 @@ export class ServerConnectionPool {
   private passwordProvider(ctx: ExtensionContext): SshPasswordProvider | undefined {
     if (!this.passwordEnabled()) { this.passwordResolver.setUI(undefined); return undefined; }
     this.passwordResolver.setUI(ctx.hasUI ? {
-      prompt: (title, controls) => ctx.ui.input(title, "Enter the SSH password", controls ? {
+      prompt: (title, controls) => ctx.ui.input(title, "请输入 SSH 密码", controls ? {
         timeout: controls.timeoutMs,
         signal: controls.signal,
       } : undefined),

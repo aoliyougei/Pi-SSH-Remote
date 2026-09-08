@@ -614,25 +614,25 @@ export function createSshRemoteExtension(
           syncRemoteTools();
           if (previous.transport !== config.transport) {
             ctx.ui.notify(
-              "SSH transport saved; use /ssh-reconnect to apply it to an active workspace",
+              "SSH 传输方式已保存；请使用 /ssh-reconnect 应用到当前工作区",
               "info",
             );
           } else if (previous.aiControlTools !== config.aiControlTools) {
             ctx.ui.notify(
-              `SSH AI control tools ${config.aiControlTools ? "enabled" : "disabled"}`,
+              `SSH AI 控制工具已${config.aiControlTools ? "启用" : "禁用"}`,
               "info",
             );
           } else if (previous.aiPasswordAuth !== config.aiPasswordAuth) {
             ctx.ui.notify(
-              `SSH AI password authentication ${config.aiPasswordAuth ? "enabled" : "disabled"}`,
+              `SSH AI 密码认证已${config.aiPasswordAuth ? "启用" : "禁用"}`,
               "info",
             );
           } else {
-            ctx.ui.notify("SSH Remote settings saved", "info");
+            ctx.ui.notify("SSH Remote 设置已保存", "info");
           }
         } catch (error) {
           ctx.ui.notify(
-            `Failed to save SSH Remote settings: ${error instanceof Error ? error.message : String(error)}`,
+            `保存 SSH Remote 设置失败：${error instanceof Error ? error.message : String(error)}`,
             "error",
           );
         }
@@ -641,19 +641,19 @@ export function createSshRemoteExtension(
 
     pi.registerFlag("ssh", {
       description:
-        "SSH remote workspace: host, host:path, host:port, or host:port:path",
+        "SSH 远程工作区：host、host:path、host:port 或 host:port:path",
       type: "string",
     });
     pi.registerFlag("ssh-config", {
-      description: "Alternate local OpenSSH config file used with --ssh",
+      description: "与 --ssh 配合使用的其他本地 OpenSSH 配置文件",
       type: "string",
     });
     pi.registerFlag("ssh-shell", {
-      description: "Remote shell: auto, bash, zsh, pwsh, or powershell",
+      description: "远端 Shell：auto、bash、zsh、pwsh 或 powershell",
       type: "string",
     });
     pi.registerFlag("ssh-transport", {
-      description: "SSH transport: auto, openssh, or ssh2",
+      description: "SSH 传输方式：auto、openssh 或 ssh2",
       type: "string",
     });
 
@@ -675,9 +675,9 @@ export function createSshRemoteExtension(
         const ctx = localMirrors.current?.ctx;
         if (!ctx) return;
         const color = status.state === "synced" ? "success" : status.state === "failed" ? "error" : status.state === "paused" ? "muted" : "warning";
-        ctx.ui.setStatus("ssh-remote-mirror", ctx.ui.theme.fg(color, `Mirror: ${status.state}${watcherMode === "polling" ? " (polling)" : ""}`));
+        ctx.ui.setStatus("ssh-remote-mirror", ctx.ui.theme.fg(color, `镜像：${status.state}${watcherMode === "polling" ? "（轮询）" : ""}`));
       },
-      onFailure: (message, ctx) => ctx.ui.notify(`Project mirror synchronization failed: ${message}`, "error"),
+      onFailure: (message, ctx) => ctx.ui.notify(`项目镜像同步失败：${message}`, "error"),
     });
     const remoteExecController = new RemoteExecController({
       servers: serverController,
@@ -708,7 +708,7 @@ export function createSshRemoteExtension(
       connections: savedServerConnections,
       isFullRemoteWorkspace: () => runtime.kind !== "disabled",
       authorizeMapping: async (mapping, ctx) => {
-        if (!ctx.isProjectTrusted()) throw new Error("The current project is not trusted; project mirrors cannot be authorized");
+        if (!ctx.isProjectTrusted()) throw new Error("当前项目不受信任，不能授权项目镜像");
         const server = serverController.get(mapping.serverId);
         if (!server) throw new Error("Saved SSH server not found");
         const lease = await savedServerConnections.acquire(server, ctx);
@@ -720,7 +720,7 @@ export function createSshRemoteExtension(
           const fs = new RemoteMirrorFs(lease.adapter, { ...lease.workspace, cwd: canonicalRoot }, canonicalRoot);
           const remote = await fs.scan(exclusions);
           const preview = buildSyncPlan(manifest, remote, exclusions);
-          const confirmed = ctx.hasUI && await ctx.ui.confirm("Authorize strict project mirror", `Local: ${candidate.localRoot}\nRemote: ${server.name}:${canonicalRoot}\n\nUpload/update: ${preview.uploadFiles.length}\nDelete files: ${preview.deleteFiles.length + preview.deleteSymlinks.length}\nDelete directories: ${preview.deleteDirectories.length}\nProtected: ${preview.protectedPaths.length}\n\nRemote non-protected files absent locally will be deleted.`);
+          const confirmed = ctx.hasUI && await ctx.ui.confirm("授权严格项目镜像", `本地：${candidate.localRoot}\n远端：${server.name}:${canonicalRoot}\n\n上传/更新：${preview.uploadFiles.length}\n删除文件：${preview.deleteFiles.length + preview.deleteSymlinks.length}\n删除目录：${preview.deleteDirectories.length}\n受保护：${preview.protectedPaths.length}\n\n远端中本地不存在的非保护文件将被删除。`);
           if (!confirmed) return;
           await createAuthorizedMarker(candidate, true, { adapter: lease.adapter, workspace: lease.workspace });
           mappingController.add(candidate);
@@ -729,7 +729,7 @@ export function createSshRemoteExtension(
         syncRemoteTools();
       },
       replaceMapping: async (current, candidate, ctx) => {
-        if (!ctx.isProjectTrusted()) throw new Error("The current project is not trusted; project mirrors cannot be changed");
+        if (!ctx.isProjectTrusted()) throw new Error("当前项目不受信任，不能修改项目镜像");
         const server = serverController.get(candidate.serverId);
         if (!server) throw new Error("Saved SSH server not found");
         await localMirrors.pause();
@@ -743,7 +743,7 @@ export function createSshRemoteExtension(
           const manifest = await buildLocalManifest(next.localRoot, { exclusions });
           const fs = new RemoteMirrorFs(lease.adapter, { ...lease.workspace, cwd: canonicalRoot }, canonicalRoot);
           const preview = buildSyncPlan(manifest, await fs.scan(exclusions), exclusions);
-          const confirmed = ctx.hasUI && await ctx.ui.confirm("Authorize project mirror change", `Remote: ${server.name}:${canonicalRoot}\nUpload/update: ${preview.uploadFiles.length}\nDelete files: ${preview.deleteFiles.length + preview.deleteSymlinks.length}\nDelete directories: ${preview.deleteDirectories.length}\nProtected: ${preview.protectedPaths.length}`);
+          const confirmed = ctx.hasUI && await ctx.ui.confirm("授权项目镜像变更", `远端：${server.name}:${canonicalRoot}\n上传/更新：${preview.uploadFiles.length}\n删除文件：${preview.deleteFiles.length + preview.deleteSymlinks.length}\n删除目录：${preview.deleteDirectories.length}\n受保护：${preview.protectedPaths.length}`);
           if (!confirmed) return;
           if (next.markerId !== current.markerId || canonicalRoot !== current.remoteRoot || next.serverId !== current.serverId) await createAuthorizedMarker(next, true, { adapter: lease.adapter, workspace: lease.workspace });
           const snapshot: SyncSnapshot = { mapping: next, server, localManifest: manifest, connection: { adapter: lease.adapter, workspace: lease.workspace }, mappingGeneration: mappingController.generation, localGeneration: 0, isGenerationCurrent: () => true };
@@ -760,30 +760,30 @@ export function createSshRemoteExtension(
         }
       },
       removeMapping: async (mapping, ctx) => {
-        if (!ctx.hasUI || !await ctx.ui.confirm("Remove project mapping", "Stop automatic synchronization and remove the local mapping? Remote code and marker are retained.")) return;
+        if (!ctx.hasUI || !await ctx.ui.confirm("删除项目映射", "是否停止自动同步并删除本地映射？远端代码和 marker 将保留。")) return;
         await localMirrors.deactivate();
         mappingController.remove(mapping.id);
         syncRemoteExecutionActiveTools(pi, { enabled: config.remoteExecutionTools, trusted: ctx.isProjectTrusted(), fullRemote: false, hasServers: serverController.list().length > 0, hasMapping: false });
       },
-      pauseMapping: async (mapping, ctx) => { await localMirrors.pause(); await mappingController.pause(mapping.id); ctx.ui.notify("Project mirror paused", "info"); },
+      pauseMapping: async (mapping, ctx) => { await localMirrors.pause(); await mappingController.pause(mapping.id); ctx.ui.notify("项目镜像已暂停", "info"); },
       resumeMapping: async (mapping, ctx) => { await mappingController.resume(mapping.id); await localMirrors.activate(ctx, "mapping-resumed"); syncRemoteTools(); },
       onServersChanged: () => { ensureRemoteExecutionTools(); syncRemoteTools(); },
       syncMapping: async (ctx) => {
         const mapping = mappingController.find(ctx.cwd);
         const queue = mapping ? localMirrors.getQueue(mapping) : undefined;
-        if (!mapping || !queue) throw new Error("No active project mirror is configured");
+        if (!mapping || !queue) throw new Error("未配置活动的项目镜像");
         await queue.requestSync({ reason: "manual-command", immediate: true, force: true });
-        ctx.ui.notify("Project mirror synchronized and verified", "info");
+        ctx.ui.notify("项目镜像已同步并验证", "info");
       },
     });
     pi.registerCommand("ssh-sync", {
-      description: "Force strict synchronization and verification of the current local project mirror",
+      description: "强制严格同步并验证当前本地项目镜像",
       handler: async (_args, ctx) => {
         await ctx.waitForIdle();
         const mapping = mappingController.find(ctx.cwd);
         const queue = mapping ? localMirrors.getQueue(mapping) : undefined;
-        if (!mapping || !queue) { ctx.ui.notify("No active project mirror is configured", "error"); return; }
-        try { await queue.requestSync({ reason: "manual-command", immediate: true, force: true }); ctx.ui.notify("Project mirror synchronized and verified", "info"); }
+        if (!mapping || !queue) { ctx.ui.notify("未配置活动的项目镜像", "error"); return; }
+        try { await queue.requestSync({ reason: "manual-command", immediate: true, force: true }); ctx.ui.notify("项目镜像已同步并验证", "info"); }
         catch (error) { ctx.ui.notify(error instanceof Error ? error.message : String(error), "error"); }
       },
     });
@@ -828,13 +828,13 @@ export function createSshRemoteExtension(
         ctx.ui.setStatus(STATUS_KEY, undefined);
         return;
       }
-      const prefix = ctx.ui.theme.fg("muted", "SSH:");
+      const prefix = ctx.ui.theme.fg("muted", "SSH：");
       const [color, label] =
         runtime.kind === "connecting"
-          ? (["warning", "Connecting"] as const)
+          ? (["warning", "连接中"] as const)
           : runtime.kind === "failed"
-            ? (["error", "Disconnected"] as const)
-            : (["success", "Connected"] as const);
+            ? (["error", "已断开"] as const)
+            : (["success", "已连接"] as const);
       ctx.ui.setStatus(
         STATUS_KEY,
         `${prefix} ${ctx.ui.theme.fg(color, label)}`,
@@ -849,7 +849,7 @@ export function createSshRemoteExtension(
       const message = error instanceof Error ? error.message : String(error);
       runtime = { kind: "failed", intent, error: message };
       updateStatus(ctx);
-      ctx.ui.notify(`SSH remote unavailable: ${message}`, "error");
+      ctx.ui.notify(`SSH 连接失败：${message}`, "error");
     };
 
     const markConnectionLost = (
@@ -863,7 +863,7 @@ export function createSshRemoteExtension(
       const message = error instanceof Error ? error.message : String(error);
       runtime = { kind: "failed", intent: active.intent, error: message };
       updateStatus(ctx);
-      ctx.ui.notify(`SSH connection lost: ${message}`, "error");
+      ctx.ui.notify(`SSH 连接已断开：${message}`, "error");
       void (async () => {
         try {
           await active.client.dispose({ preserveBackgroundSessions: true });
@@ -879,7 +879,7 @@ export function createSshRemoteExtension(
       signal?: AbortSignal,
     ): Promise<void> => {
       try {
-        if (signal?.aborted) throw new Error("SSH status check cancelled");
+        if (signal?.aborted) throw new Error("SSH 状态检查已取消");
         const result = await active.client.run(
           active.adapter.buildShellCommand(
             "exit 0",
@@ -896,7 +896,7 @@ export function createSshRemoteExtension(
           );
         }
       } catch (error) {
-        if (signal?.aborted) throw new Error("SSH status check cancelled", {
+        if (signal?.aborted) throw new Error("SSH 状态检查已取消", {
           cause: error,
         });
         markConnectionLost(active, ctx, error);
@@ -1049,7 +1049,7 @@ export function createSshRemoteExtension(
                 }
                 return ctx.ui.input(
                   title,
-                  "Enter the SSH password",
+                  "请输入 SSH 密码",
                   controls
                     ? {
                         timeout: controls.timeoutMs,
@@ -1191,7 +1191,7 @@ export function createSshRemoteExtension(
           );
         }
         for (const warning of client.compatibilityWarnings ?? []) {
-          ctx.ui.notify(`ssh2 compatibility: ${warning}`, "warning");
+          ctx.ui.notify(`ssh2 兼容性警告：${warning}`, "warning");
         }
         const transportLabel = client.transport === "ssh2"
           ? "ssh2/persistent"
@@ -1293,7 +1293,7 @@ export function createSshRemoteExtension(
     ): Promise<boolean> => {
       if (runtime.kind === "disabled") {
         if (options.notify !== false) {
-          ctx.ui.notify("The current workspace is already local", "info");
+          ctx.ui.notify("当前工作区已经是本地工作区", "info");
         }
         return false;
       }
@@ -1344,10 +1344,10 @@ export function createSshRemoteExtension(
         pi.appendEntry(SSH_LOCAL_SESSION_STATE_TYPE, SSH_LOCAL_SESSION_STATE);
       }
       if (disposeError) {
-        ctx.ui.notify(`SSH connection cleanup warning: ${disposeError}`, "warning");
+        ctx.ui.notify(`SSH 连接清理警告：${disposeError}`, "warning");
       }
       if (options.notify !== false) {
-        ctx.ui.notify(`Local workspace active: ${ctx.cwd}`, "info");
+        ctx.ui.notify(`本地工作区已启用：${ctx.cwd}`, "info");
       }
       emitEnvironmentEvent({
         action: "exit",
@@ -1372,7 +1372,7 @@ export function createSshRemoteExtension(
         if (runtime.kind === "connecting") {
           throw new Error(`SSH is still connecting to ${runtime.intent.target}`);
         }
-        throw new Error("The current workspace is local; use /ssh-connect first");
+        throw new Error("当前是本地工作区，请先使用 /ssh-connect");
       }
       const active = runtime;
       // ssh_cd receives an explicitly remote path. Do not use mapCwd here:
@@ -1465,49 +1465,49 @@ export function createSshRemoteExtension(
     const formatStatus = (ctx: ExtensionContext): string => {
       if (runtime.kind === "disabled") {
         const mapping = mappingController.find(ctx.cwd);
-        if (!mapping) return `Workspace: local\ncwd: ${ctx.cwd}\nProject mirror: unconfigured`;
+        if (!mapping) return `工作区：本地\ncwd：${ctx.cwd}\n项目镜像：未配置`;
         const server = serverController.get(mapping.serverId);
         const status = localMirrors.getQueue(mapping)?.status;
         return [
-          "Workspace: local",
-          `cwd: ${ctx.cwd}`,
-          `Project mirror: ${status?.state ?? (ctx.isProjectTrusted() ? "unavailable" : "disabled (project not trusted)")}`,
-          `server: ${server?.name ?? "missing"}`,
-          `remote cwd: ${mapping.remoteRoot}`,
-          status?.lastSuccessAt ? `last sync: ${status.lastSuccessAt}` : undefined,
-          status?.lastError ? `error: ${status.lastError}` : undefined,
-          "local tools: available",
+          "工作区：本地",
+          `cwd：${ctx.cwd}`,
+          `项目镜像：${status?.state ?? (ctx.isProjectTrusted() ? "不可用" : "已禁用（项目不受信任）")}`,
+          `服务器：${server?.name ?? "缺失"}`,
+          `远端 cwd：${mapping.remoteRoot}`,
+          status?.lastSuccessAt ? `上次同步：${status.lastSuccessAt}` : undefined,
+          status?.lastError ? `错误：${status.lastError}` : undefined,
+          "本地工具：可用",
         ].filter((line): line is string => Boolean(line)).join("\n");
       }
       if (runtime.kind === "connecting") {
-        return `Workspace: SSH connecting\ntarget: ${runtime.intent.target}`;
+        return `工作区：SSH 连接中\n目标：${runtime.intent.target}`;
       }
       if (runtime.kind === "failed") {
         return [
-          "Workspace: SSH unavailable",
-          runtime.intent?.target ? `target: ${runtime.intent.target}` : undefined,
-          `error: ${runtime.error}`,
+          "工作区：SSH 不可用",
+          runtime.intent?.target ? `目标：${runtime.intent.target}` : undefined,
+          `错误：${runtime.error}`,
         ].filter((line): line is string => Boolean(line)).join("\n");
       }
       return [
-        "Workspace: SSH",
-        "connection: reachable",
-        `SSH target: ${runtime.session.target}`,
-        `platform: ${runtime.session.remotePlatform}`,
-        `shell: ${runtime.session.remoteShell}`,
-        `transport: ${runtime.client.transport ?? "custom"}${runtime.client.reusesConnection === undefined ? "" : runtime.client.reusesConnection ? " (reused)" : " (single-use)"}`,
+        "工作区：SSH",
+        "连接：可用",
+        `SSH 目标：${runtime.session.target}`,
+        `平台：${runtime.session.remotePlatform}`,
+        `Shell：${runtime.session.remoteShell}`,
+        `传输方式：${runtime.client.transport ?? "custom"}${runtime.client.reusesConnection === undefined ? "" : runtime.client.reusesConnection ? "（复用连接）" : "（单次连接）"}`,
         runtime.client.fallbackReason
-          ? `transport fallback: ${runtime.client.fallbackReason}`
+          ? `传输回退：${runtime.client.fallbackReason}`
           : undefined,
         runtime.session.port !== undefined
-          ? `port: ${runtime.session.port}`
+          ? `端口：${runtime.session.port}`
           : undefined,
-        `cwd: ${runtime.session.remoteCwd}`,
-        `home: ${runtime.session.remoteHome}`,
+        `cwd：${runtime.session.remoteCwd}`,
+        `主目录：${runtime.session.remoteHome}`,
         runtime.session.configFile
-          ? `Config file: ${runtime.session.configFile}`
+          ? `配置文件：${runtime.session.configFile}`
           : undefined,
-        localMirrors.current ? "Local project mirror: paused" : undefined,
+        localMirrors.current ? "本地项目镜像：已暂停" : undefined,
       ].filter((line): line is string => Boolean(line)).join("\n");
     };
 
@@ -1957,19 +1957,19 @@ export function createSshRemoteExtension(
     });
 
     pi.registerCommand("ssh-connect", {
-      description: "Connect or switch the current session to an SSH workspace: /ssh-connect <[user@]host[:port][:path]>",
+      description: "连接或切换当前会话到 SSH 工作区：/ssh-connect <[user@]host[:port][:path]>",
       handler: async (args, ctx) => {
         await ctx.waitForIdle();
         const target = args.trim();
         if (!target) {
           ctx.ui.notify(
-            "Usage: /ssh-connect <[user@]host[:port][:path]>",
+            "用法：/ssh-connect <[user@]host[:port][:path]>",
             "warning",
           );
           return;
         }
         if (runtime.kind === "connecting") {
-          ctx.ui.notify(`SSH is still connecting to ${runtime.intent.target}`, "warning");
+          ctx.ui.notify(`SSH 仍在连接：${runtime.intent.target}`, "warning");
           return;
         }
         try {
@@ -1988,7 +1988,7 @@ export function createSshRemoteExtension(
     });
 
     pi.registerCommand("ssh-exit", {
-      description: "Exit the SSH workspace and return this session to its local workspace",
+      description: "退出 SSH 工作区并返回当前会话的本地工作区",
       handler: async (_args, ctx) => {
         await ctx.waitForIdle();
         try {
@@ -2004,12 +2004,12 @@ export function createSshRemoteExtension(
     });
 
     pi.registerCommand("ssh-cd", {
-      description: "Change the persistent cwd of the current SSH workspace",
+      description: "修改当前 SSH 工作区的持久 cwd",
       handler: async (args, ctx) => {
         await ctx.waitForIdle();
         const path = args.trim();
         if (!path) {
-          ctx.ui.notify("Usage: /ssh-cd <remote-path>", "warning");
+          ctx.ui.notify("用法：/ssh-cd <remote-path>", "warning");
           return;
         }
         try {
@@ -2029,7 +2029,7 @@ export function createSshRemoteExtension(
     });
 
     pi.registerCommand("ssh-status", {
-      description: "Live-check and show the active local or SSH workspace status",
+      description: "实时检查并显示当前本地或 SSH 工作区状态",
       handler: async (_args, ctx) => {
         await refreshConnectionStatus(ctx);
         ctx.ui.notify(
@@ -2040,7 +2040,7 @@ export function createSshRemoteExtension(
     });
 
     pi.registerCommand("ssh-reconnect", {
-      description: "Reconnect the current SSH remote workspace",
+      description: "重新连接当前 SSH 远程工作区",
       handler: async (_args, ctx) => {
         await ctx.waitForIdle();
         const intent =
@@ -2050,7 +2050,7 @@ export function createSshRemoteExtension(
               ? runtime.intent
               : undefined;
         if (!intent) {
-          ctx.ui.notify("This session has no SSH remote target", "warning");
+          ctx.ui.notify("当前会话没有 SSH 远端目标", "warning");
           return;
         }
         ensureRemoteRouting(ctx);
@@ -2063,12 +2063,12 @@ export function createSshRemoteExtension(
     });
 
     pi.registerCommand("ssh-forget-password", {
-      description: "Forget SSH passwords used by this session, or all cached passwords with: /ssh-forget-password all",
+      description: "清除当前会话使用的 SSH 密码；使用 /ssh-forget-password all 清除全部缓存密码",
       handler: async (args, ctx) => {
         const scope = args.trim().toLowerCase();
         if (scope !== "" && scope !== "all") {
           ctx.ui.notify(
-            "Usage: /ssh-forget-password [all]",
+            "用法：/ssh-forget-password [all]",
             "warning",
           );
           return;
@@ -2078,8 +2078,8 @@ export function createSshRemoteExtension(
           const count = passwordResolver.forgetAll();
           ctx.ui.notify(
             count === 0
-              ? "No cached SSH passwords to forget"
-              : `Forgot ${count} cached SSH password${count === 1 ? "" : "s"} across all sessions`,
+              ? "没有可清除的 SSH 缓存密码"
+              : `已清除全部会话中的 ${count} 个 SSH 缓存密码`,
             "info",
           );
           return;
@@ -2087,8 +2087,8 @@ export function createSshRemoteExtension(
         const count = passwordResolver.forgetCurrentSession();
         ctx.ui.notify(
           count === 0
-            ? "No cached SSH passwords were used by this session"
-            : `Forgot ${count} cached SSH password${count === 1 ? "" : "s"} used by this session`,
+            ? "当前会话未使用 SSH 缓存密码"
+            : `已清除当前会话使用的 ${count} 个 SSH 缓存密码`,
           "info",
         );
       },
@@ -2096,7 +2096,7 @@ export function createSshRemoteExtension(
 
     const assertAiControlToolsEnabled = (): void => {
       if (!config.aiControlTools) {
-        throw new Error("SSH AI control tools are disabled in /aoliyougei-settings");
+        throw new Error("SSH AI 控制工具已在 /aoliyougei-settings 中禁用");
       }
     };
 
@@ -2107,9 +2107,9 @@ export function createSshRemoteExtension(
 
       pi.registerTool({
         name: "ssh_connect",
-        label: "SSH Connect",
-        description: "Connect the current Pi session to an SSH workspace, replacing an active SSH target without requiring ssh_exit first. The target accepts [user@]host, [user@]host:port, [user@]host:path, or [user@]host:port:path. When AI password authentication is enabled, each password required by the target or its ProxyJump chain must be entered by the user in Pi's UI within 60 seconds; otherwise key-based login is required.",
-        promptSnippet: "Connect or switch the current session to an SSH workspace",
+        label: "SSH 连接",
+        description: "将当前 Pi 会话连接到 SSH 工作区，可直接替换活动目标。目标支持 [user@]host、[user@]host:port、[user@]host:path 或 [user@]host:port:path。启用 AI 密码认证时，用户必须在 60 秒内通过 Pi 界面输入目标及 ProxyJump 链需要的每个密码；否则必须使用密钥登录。",
+        promptSnippet: "连接或切换当前会话到 SSH 工作区",
         promptGuidelines: [
           "Use ssh_connect when the user asks to enter an SSH workspace or switch directly from the active SSH target to another one; do not call ssh_exit before switching targets.",
           "Before calling ssh_connect, tell the user that Pi may show one or more SSH password prompts when AI password auth is enabled and that they must enter each password themselves within 60 seconds; never ask the user to send a password in chat.",
@@ -2119,7 +2119,7 @@ export function createSshRemoteExtension(
         ],
         parameters: Type.Object({
           target: Type.String({
-            description: "SSH target as [user@]host, [user@]host:port, [user@]host:path, or [user@]host:port:path",
+            description: "SSH 目标，格式为 [user@]host、[user@]host:port、[user@]host:path 或 [user@]host:port:path",
             minLength: 1,
           }),
         }),
@@ -2193,9 +2193,9 @@ export function createSshRemoteExtension(
 
       pi.registerTool({
         name: "ssh_exit",
-        label: "SSH Exit",
-        description: "Exit the active SSH workspace and route the current Pi session back to its local workspace.",
-        promptSnippet: "Exit SSH and return the current session to its local workspace",
+        label: "SSH 退出",
+        description: "退出活动 SSH 工作区，并将当前 Pi 会话切回本地工作区。",
+        promptSnippet: "退出 SSH 并返回当前会话的本地工作区",
         promptGuidelines: [
           "Use ssh_exit only when the user asks to return the current session to its local workspace.",
           "Do not combine ssh_exit with workspace file or shell operations in the same tool batch; exit first, then inspect the local environment.",
@@ -2228,15 +2228,15 @@ export function createSshRemoteExtension(
 
       pi.registerTool({
         name: "ssh_cd",
-        label: "SSH Cwd",
-        description: "Change the persistent working directory of the active SSH workspace. Relative paths resolve from the current remote cwd.",
-        promptSnippet: "Change the cwd of the active SSH workspace",
+        label: "SSH 工作目录",
+        description: "修改活动 SSH 工作区的持久工作目录；相对路径从当前远端 cwd 解析。",
+        promptSnippet: "修改活动 SSH 工作区的 cwd",
         promptGuidelines: [
           "Use ssh_cd when the user asks to change the active SSH workspace directory; subsequent workspace tools use the resolved remote cwd.",
           "Do not combine ssh_cd with workspace file or shell operations in the same tool batch; change cwd first, then inspect it.",
         ],
         parameters: Type.Object({
-          path: Type.String({ description: "Remote directory path", minLength: 1 }),
+          path: Type.String({ description: "远端目录路径", minLength: 1 }),
         }),
         executionMode: "sequential",
         renderCall(args, theme, context) {
@@ -2266,9 +2266,9 @@ export function createSshRemoteExtension(
 
       pi.registerTool({
         name: "ssh_status",
-        label: "SSH Status",
-        description: "Live-check and report whether the current Pi session uses its local workspace or an SSH workspace, including target, cwd, shell, and transport.",
-        promptSnippet: "Inspect the current local or SSH workspace environment",
+        label: "SSH 状态",
+        description: "实时检查当前 Pi 会话使用本地还是 SSH 工作区，并报告目标、cwd、Shell 和传输方式。",
+        promptSnippet: "检查当前本地或 SSH 工作区环境",
         promptGuidelines: [
           "Use ssh_status when the current local or SSH workspace environment is unclear.",
         ],

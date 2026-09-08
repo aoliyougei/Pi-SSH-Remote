@@ -214,12 +214,12 @@ export class SshPasswordResolver {
     if (!this.ui) return undefined;
     if (failureInfo) {
       this.ui.notify(
-        `SSH password rejected: ${failureInfo.replace(/\s+/g, " ").trim().slice(0, 500)}`,
+        `SSH 密码被拒绝：${failureInfo.replace(/\s+/g, " ").trim().slice(0, 500)}`,
         "warning",
       );
     }
     const password = await this.promptPassword(
-      `SSH password for ${endpoint.hostLabel}`,
+      `请输入 ${endpoint.hostLabel} 的 SSH 密码`,
       controls,
     );
     if (password === undefined || password === "") return undefined;

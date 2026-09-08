@@ -11,12 +11,12 @@ test("destructive policy inspects chained commands", () => {
 test("workspace and mirror tool names remain semantically distinct", async () => {
   const source = await import("node:fs/promises").then((fs) => fs.readFile(new URL("../extensions/ssh-remote/src/exec/tools.ts", import.meta.url), "utf8"));
   assert.match(source, /name: "ssh_exec"/);
-  assert.match(source, /does not switch the workspace/);
+  assert.match(source, /不改变当前工作区/);
   assert.match(source, /name: "ssh_sync"/);
-  assert.match(source, /full SSH workspace/);
+  assert.match(source, /完整 SSH 工作区/);
   assert.doesNotMatch(source, /name: "ssh_connect"/);
   const controller = await import("node:fs/promises").then((fs) => fs.readFile(new URL("../extensions/ssh-remote/src/exec/controller.ts", import.meta.url), "utf8"));
   assert.match(controller, /adapter\.runShell/);
-  assert.match(controller, /Specify server explicitly.*full SSH workspace/);
+  assert.match(controller, /完整 SSH 工作区.*显式指定 server/);
   assert.doesNotMatch(controller, /client\.run\(command/);
 });

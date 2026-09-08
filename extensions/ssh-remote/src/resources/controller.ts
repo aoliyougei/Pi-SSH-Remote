@@ -12,7 +12,7 @@ const hash = (value: Buffer | string) => createHash("sha256").update(value).dige
 
 async function read(adapter: RemoteAdapter, workspace: RemoteWorkspace, path: string): Promise<FileData> {
   const content = await adapter.readFile(adapter.toToolPath(posix.join(workspace.cwd, path), workspace));
-  if (content.length > MAX_SIZE) throw new Error(`Remote resource too large: ${path}`);
+  if (content.length > MAX_SIZE) throw new Error(`远端资源过大：${path}`);
   return { path, content, sha256: hash(content) };
 }
 
@@ -34,7 +34,7 @@ export async function scanRemoteResources(adapter: RemoteAdapter, workspace: Rem
       const files: FileData[] = [], queue = [{ rel: "", depth: 0 }];
       while (queue.length) {
         const current = queue.shift()!;
-        if (current.depth > 10) throw new Error("Remote Skill depth limit exceeded");
+        if (current.depth > 10) throw new Error("远端 Skill 超出深度限制");
         const directory = posix.join(base, root.name, current.rel);
         for (const entry of await adapter.listDirectory(adapter.toToolPath(posix.join(workspace.cwd, directory), workspace))) {
           if (entry.name === ".git" || entry.name === "node_modules") continue;
@@ -45,7 +45,7 @@ export async function scanRemoteResources(adapter: RemoteAdapter, workspace: Rem
           else {
             const file = await read(adapter, workspace, posix.join(base, root.name, relative));
             count += 1; total += file.content.length;
-            if (count > MAX_FILES || total > MAX_TOTAL) throw new Error("Remote resource limits exceeded");
+            if (count > MAX_FILES || total > MAX_TOTAL) throw new Error("远端资源超出数量或大小限制");
             files.push({ ...file, path: relative });
           }
         }
@@ -58,7 +58,7 @@ export async function scanRemoteResources(adapter: RemoteAdapter, workspace: Rem
 }
 
 function wrapSkill(source: string, remoteRoot: string): string {
-  const notice = `\n\n> Remote skill source: ${remoteRoot}\n> Resolve relative references and scripts against that remote root. Use the active SSH workspace tools. Never execute files from the local cache path.\n`;
+  const notice = `\n\n> 远端 Skill 来源：${remoteRoot}\n> 相对引用和脚本应基于该远端根目录解析。请使用活动 SSH 工作区工具，禁止执行本地缓存路径中的文件。\n`;
   if (source.startsWith("---\n")) { const end = source.indexOf("\n---", 4); if (end >= 0) return source.slice(0, end + 4) + notice + source.slice(end + 4); }
   return notice.trimStart() + source;
 }
@@ -97,8 +97,8 @@ export class RemoteResourceController {
     this.clear();
     if (!snapshot.agents && snapshot.skills.length === 0) return false;
     if (!ctx.hasUI) return false;
-    const choice = await ctx.ui.select(`Load remote project resources?\n${workspace.cwd}\nAGENTS: ${snapshot.agents ? snapshot.agents.path : "none"}\nSkills: ${snapshot.skills.length}\nDigest: ${snapshot.digest}\nSkill scripts run on the SSH server.`, ["Load for this entry", "Do not load"]);
-    if (choice !== "Load for this entry") return false;
+    const choice = await ctx.ui.select(`是否加载远端项目资源？\n${workspace.cwd}\nAGENTS：${snapshot.agents ? snapshot.agents.path : "无"}\nSkills：${snapshot.skills.length}\n摘要：${snapshot.digest}\nSkill 脚本将在 SSH 服务器上运行。`, ["为本次连接加载", "不加载"]);
+    if (choice !== "为本次连接加载") return false;
     const cache = await stage(snapshot, workspace, this.cacheRoot);
     transactions.set(this.sessionId, { snapshot, cache, identity });
     return cache.skillPaths.length > 0;
@@ -107,8 +107,8 @@ export class RemoteResourceController {
     const transaction = this.transaction();
     if (!transaction) return systemPrompt;
     const next = await scanRemoteResources(adapter, workspace);
-    if (next.digest !== transaction.snapshot.digest) { this.clear(); throw new Error("Remote project resources changed; reconnect or change directory to review them again"); }
+    if (next.digest !== transaction.snapshot.digest) { this.clear(); throw new Error("远端项目资源已变化，请重新连接或切换目录后再次确认"); }
     if (!next.agents) return systemPrompt;
-    return `${systemPrompt}\n\n# Remote Project Context\nSource: ssh://${workspace.cwd}/${next.agents.path}\nDigest: ${next.agents.sha256}\n\n${next.agents.content.toString("utf8")}`;
+    return `${systemPrompt}\n\n# 远端项目上下文\n来源：ssh://${workspace.cwd}/${next.agents.path}\n摘要：${next.agents.sha256}\n\n${next.agents.content.toString("utf8")}`;
   }
 }

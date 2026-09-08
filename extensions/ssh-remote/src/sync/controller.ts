@@ -37,11 +37,11 @@ export class LocalMirrorController {
   async activate(ctx: ExtensionContext, reason: SyncReason = "startup"): Promise<void> {
     if (this.closed) return;
     await this.deactivate();
-    if (!ctx.isProjectTrusted()) { ctx.ui.setStatus("ssh-remote-mirror", ctx.ui.theme.fg("warning", "Mirror: Untrusted")); return; }
+    if (!ctx.isProjectTrusted()) { ctx.ui.setStatus("ssh-remote-mirror", ctx.ui.theme.fg("warning", "镜像：项目不受信任")); return; }
     const mapping = this.options.mappings.find(ctx.cwd);
     if (!mapping || mapping.paused || !mapping.autoSync) { ctx.ui.setStatus("ssh-remote-mirror", undefined); return; }
     const server = this.options.servers.get(mapping.serverId);
-    if (!server) { ctx.ui.setStatus("ssh-remote-mirror", ctx.ui.theme.fg("error", "Mirror: Failed")); return; }
+    if (!server) { ctx.ui.setStatus("ssh-remote-mirror", ctx.ui.theme.fg("error", "镜像：失败")); return; }
     let queue!: MirrorQueue;
     let watcherMode = "native";
     queue = new MirrorQueue({

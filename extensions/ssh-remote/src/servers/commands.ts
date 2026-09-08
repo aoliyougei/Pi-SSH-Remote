@@ -33,9 +33,9 @@ function displayTarget(server: SavedSshServer): string {
 function parsePort(value: string | undefined): number | undefined {
   const text = value?.trim();
   if (!text) return undefined;
-  if (!/^\d+$/.test(text)) throw new Error("SSH port must be an integer from 1 to 65535");
+  if (!/^\d+$/.test(text)) throw new Error("SSH 端口必须是 1 到 65535 之间的整数");
   const port = Number(text);
-  if (!Number.isInteger(port) || port < 1 || port > 65_535) throw new Error("SSH port must be an integer from 1 to 65535");
+  if (!Number.isInteger(port) || port < 1 || port > 65_535) throw new Error("SSH 端口必须是 1 到 65535 之间的整数");
   return port;
 }
 
@@ -47,7 +47,7 @@ async function selectServer(
   if (requested) return servers.find((server) => server.name.toLocaleLowerCase("en-US") === requested.toLocaleLowerCase("en-US"));
   if (!ctx.hasUI) return undefined;
   const labels = servers.map((server) => `${server.name} — ${displayTarget(server)}${server.description ? ` — ${server.description}` : ""}`);
-  const selected = await ctx.ui.select("Select SSH server", labels);
+  const selected = await ctx.ui.select("选择 SSH 服务器", labels);
   const index = selected ? labels.indexOf(selected) : -1;
   return index >= 0 ? servers[index] : undefined;
 }
@@ -60,14 +60,14 @@ async function testServer(
   const lease = await connections.acquire(server, ctx);
   try {
     return [
-      `Server: ${server.name}`,
-      `Target: ${displayTarget(server)}`,
-      "Status: reachable",
-      `Platform: ${lease.workspace.platform}`,
-      `Shell: ${lease.workspace.shell}`,
-      `Transport: ${lease.client.transport ?? "custom"}${lease.client.reusesConnection === undefined ? "" : lease.client.reusesConnection ? " (reused)" : " (single-use)"}`,
-      `Home: ${lease.workspace.home}`,
-      `Login cwd: ${lease.workspace.cwd}`,
+      `服务器：${server.name}`,
+      `目标：${displayTarget(server)}`,
+      "状态：可连接",
+      `平台：${lease.workspace.platform}`,
+      `Shell：${lease.workspace.shell}`,
+      `传输方式：${lease.client.transport ?? "custom"}${lease.client.reusesConnection === undefined ? "" : lease.client.reusesConnection ? "（复用连接）" : "（单次连接）"}`,
+      `主目录：${lease.workspace.home}`,
+      `登录目录：${lease.workspace.cwd}`,
     ].join("\n");
   } finally {
     await lease.release();
@@ -78,7 +78,7 @@ async function addServer(
   ctx: ExtensionContext,
   dependencies: SshManagementCommandDependencies,
 ): Promise<void> {
-  if (!ctx.hasUI) throw new Error("/ssh add requires an interactive UI");
+  if (!ctx.hasUI) throw new Error("/ssh add 需要交互式界面");
   const name = (await ctx.ui.input("服务器名称", "test-api"))?.trim();
   if (!name) return;
   const description = (await ctx.ui.input("描述（可选）", ""))?.trim() || undefined;
@@ -153,9 +153,9 @@ async function editServer(
   ctx: ExtensionContext,
   dependencies: SshManagementCommandDependencies,
 ): Promise<void> {
-  if (!ctx.hasUI) throw new Error("/ssh edit requires an interactive UI");
+  if (!ctx.hasUI) throw new Error("/ssh edit 需要交互式界面");
   const original = await selectServer(ctx, dependencies.servers.list(), requested);
-  if (!original) throw new Error(requested ? `SSH server not found: ${requested}` : "No SSH server selected");
+  if (!original) throw new Error(requested ? `未找到 SSH 服务器：${requested}` : "未选择 SSH 服务器");
   const name = (await ctx.ui.input(`服务器名称（当前：${original.name}）`, original.name))?.trim() || original.name;
   const descriptionInput = await ctx.ui.input(`描述（当前：${original.description ?? "无"}；输入 - 清除）`, original.description ?? "");
   const description = descriptionInput?.trim() === "-" ? undefined : descriptionInput?.trim() || original.description;
@@ -221,13 +221,13 @@ async function removeServer(
   dependencies: SshManagementCommandDependencies,
 ): Promise<void> {
   const server = await selectServer(ctx, dependencies.servers.list(), requested);
-  if (!server) throw new Error(requested ? `SSH server not found: ${requested}` : "No SSH server selected");
+  if (!server) throw new Error(requested ? `未找到 SSH 服务器：${requested}` : "未选择 SSH 服务器");
   const mappings = dependencies.mappings.list().filter((mapping) => mapping.serverId === server.id);
-  if (!ctx.hasUI) throw new Error("/ssh rm requires an interactive confirmation");
+  if (!ctx.hasUI) throw new Error("/ssh rm 需要交互式确认");
   const message = mappings.length > 0
-    ? `${server.name} is referenced by ${mappings.length} project mapping(s). Delete the server and those local mappings? Remote files and markers are not deleted.`
-    : `Delete saved SSH server ${server.name}? Remote files and SSH credentials are not deleted.`;
-  if (!await ctx.ui.confirm("Delete SSH server", message)) return;
+    ? `${server.name} 被 ${mappings.length} 个项目映射引用。是否删除该服务器及这些本地映射？远端文件和 marker 不会删除。`
+    : `是否删除已保存的 SSH 服务器 ${server.name}？远端文件和 SSH 凭据不会删除。`;
+  if (!await ctx.ui.confirm("删除 SSH 服务器", message)) return;
   let removeManagedKey = false;
   if (server.identityFile && isManagedKeyPath(server.identityFile, dependencies.managedKeyDirectory)) {
     const shared = dependencies.servers.list().some((candidate) => candidate.id !== server.id && candidate.identityFile === server.identityFile);
@@ -245,22 +245,22 @@ async function removeServer(
     }
   }
   dependencies.onServersChanged?.();
-  ctx.ui.notify(`Deleted SSH server: ${server.name}`, "info");
+  ctx.ui.notify(`已删除 SSH 服务器：${server.name}`, "info");
 }
 
 function listServers(dependencies: SshManagementCommandDependencies): string {
   const servers = dependencies.servers.list();
-  if (servers.length === 0) return "No saved SSH servers. Use /ssh add.";
-  return ["SSH servers:", ...servers.flatMap((server) => {
+  if (servers.length === 0) return "没有已保存的 SSH 服务器，请使用 /ssh add。";
+  return ["SSH 服务器：", ...servers.flatMap((server) => {
     const mappings = dependencies.mappings.list().filter((mapping) => mapping.serverId === server.id).length;
     return [
       "",
       server.name,
-      ...(server.description ? [`  description: ${server.description}`] : []),
-      `  target: ${displayTarget(server)}`,
-      `  shell: ${server.shellPreference}`,
-      `  transport: ${server.transportPreference}`,
-      `  mapped projects: ${mappings}`,
+      ...(server.description ? [`  描述：${server.description}`] : []),
+      `  目标：${displayTarget(server)}`,
+      `  Shell：${server.shellPreference}`,
+      `  传输方式：${server.transportPreference}`,
+      `  已映射项目：${mappings}`,
     ];
   })].join("\n");
 }
@@ -270,7 +270,7 @@ export function registerSshManagementCommands(
   dependencies: SshManagementCommandDependencies,
 ): void {
   pi.registerCommand("ssh", {
-    description: "Manage saved SSH servers and local project mirrors",
+    description: "管理已保存的 SSH 服务器和本地项目镜像",
     handler: async (rawArgs, ctx) => {
       const [command = "", ...rest] = rawArgs.trim().split(/\s+/).filter(Boolean);
       const argument = rest.join(" ") || undefined;
@@ -279,16 +279,16 @@ export function registerSshManagementCommands(
           await ctx.waitForIdle();
         }
         if (!command) {
-          if (!ctx.hasUI) throw new Error("Use /ssh add|edit|rm|ls|test in non-interactive mode");
-          const selected = await ctx.ui.select("SSH management", ["List servers", "Add server", "Edit server", "Remove server", "Test server"]);
-          const routed = selected === "List servers" ? "ls" : selected === "Add server" ? "add" : selected === "Edit server" ? "edit" : selected === "Remove server" ? "rm" : selected === "Test server" ? "test" : undefined;
+          if (!ctx.hasUI) throw new Error("非交互模式请使用 /ssh add|edit|rm|ls|test");
+          const selected = await ctx.ui.select("服务器管理", ["列出服务器", "添加服务器", "编辑服务器", "删除服务器", "测试服务器"]);
+          const routed = selected === "列出服务器" ? "ls" : selected === "添加服务器" ? "add" : selected === "编辑服务器" ? "edit" : selected === "删除服务器" ? "rm" : selected === "测试服务器" ? "test" : undefined;
           if (!routed) return;
           await route(routed, undefined, ctx, dependencies);
           return;
         }
         await route(command.toLowerCase(), argument, ctx, dependencies);
       } catch (error) {
-        ctx.ui.notify(error instanceof Error ? error.message : String(error), "error");
+        ctx.ui.notify(`操作失败：${error instanceof Error ? error.message : String(error)}`, "error");
       }
     },
   });
@@ -309,45 +309,45 @@ async function route(
   }
   if (command === "test") {
     const server = await selectServer(ctx, dependencies.servers.list(), argument);
-    if (!server) throw new Error(argument ? `SSH server not found: ${argument}` : "No SSH server selected");
+    if (!server) throw new Error(argument ? `未找到 SSH 服务器：${argument}` : "未选择 SSH 服务器");
     ctx.ui.notify(await testServer(server, ctx, dependencies.connections), "info");
     return;
   }
   if (command === "map") {
-    if (dependencies.isFullRemoteWorkspace()) throw new Error("Project mappings can only be managed from a local workspace; use /ssh-exit first");
+    if (dependencies.isFullRemoteWorkspace()) throw new Error("项目映射只能在本地工作区管理，请先使用 /ssh-exit");
     const [action = "show"] = (argument ?? "show").split(/\s+/);
     const existing = dependencies.mappings.find(ctx.cwd);
     if (action === "show") {
-      if (!existing) { ctx.ui.notify("No remote mirror is configured for the current local project. Use /ssh map add.", "info"); return; }
+      if (!existing) { ctx.ui.notify("当前本地项目未配置远端镜像，请使用 /ssh map add。", "info"); return; }
       const server = dependencies.servers.get(existing.serverId);
-      ctx.ui.notify(`Project mirror\nLocal root: ${existing.localRoot}\nServer: ${server?.name ?? "missing"}\nRemote root: ${existing.remoteRoot}\nAuto sync: ${existing.autoSync ? "enabled" : "disabled"}\nPaused: ${existing.paused ? "yes" : "no"}`, "info");
+      ctx.ui.notify(`项目镜像\n本地根目录：${existing.localRoot}\n服务器：${server?.name ?? "缺失"}\n远端根目录：${existing.remoteRoot}\n自动同步：${existing.autoSync ? "已启用" : "已禁用"}\n已暂停：${existing.paused ? "是" : "否"}`, "info");
       return;
     }
     await ctx.waitForIdle();
     if (action === "add") {
-      if (existing) throw new Error("The current local project already has a mapping; remove or edit it first");
-      if (!ctx.hasUI) throw new Error("/ssh map add requires an interactive UI");
+      if (existing) throw new Error("当前本地项目已有映射，请先删除或编辑该映射");
+      if (!ctx.hasUI) throw new Error("/ssh map add 需要交互式界面");
       const server = await selectServer(ctx, dependencies.servers.list());
-      if (!server) throw new Error("No SSH server selected; use /ssh add first");
-      const remoteRoot = (await ctx.ui.input("Remote mirror directory", "/srv/test/project"))?.trim();
+      if (!server) throw new Error("未选择 SSH 服务器，请先使用 /ssh add");
+      const remoteRoot = (await ctx.ui.input("远端镜像目录", "/srv/test/project"))?.trim();
       if (!remoteRoot) return;
       const timestamp = new Date().toISOString();
       const mapping: LocalProjectMapping = { version: 1, id: randomUUID(), projectId: randomUUID(), localRoot: ctx.cwd, localRootCanonical: ctx.cwd, matchSubdirectories: true, serverId: server.id, remoteRoot, autoSync: true, debounceMs: 1500, localExcludePatterns: [], remoteProtectedPatterns: [...DEFAULT_REMOTE_PROTECTED_PATTERNS], markerId: randomUUID(), paused: false, createdAt: timestamp, updatedAt: timestamp };
-      if (!dependencies.authorizeMapping) throw new Error("Project mirror subsystem is unavailable");
+      if (!dependencies.authorizeMapping) throw new Error("项目镜像子系统不可用");
       await dependencies.authorizeMapping(mapping, ctx);
       return;
     }
-    if (!existing) throw new Error("No remote mirror is configured for the current local project");
+    if (!existing) throw new Error("当前本地项目未配置远端镜像");
     if (action === "edit") {
-      if (!ctx.hasUI) throw new Error("/ssh map edit requires an interactive UI");
+      if (!ctx.hasUI) throw new Error("/ssh map edit 需要交互式界面");
       const server = await selectServer(ctx, dependencies.servers.list());
-      if (!server) throw new Error("Mapped SSH server is unavailable");
-      const remoteRoot = (await ctx.ui.input(`Remote mirror directory (current: ${existing.remoteRoot})`, existing.remoteRoot))?.trim() || existing.remoteRoot;
-      const localExcludeText = await ctx.ui.input("Additional local exclusions (comma-separated)", existing.localExcludePatterns.join(","));
-      const protectedText = await ctx.ui.input("Remote protected paths (comma-separated)", existing.remoteProtectedPatterns.join(","));
-      const debounceText = await ctx.ui.input("Debounce milliseconds (250-30000)", String(existing.debounceMs));
+      if (!server) throw new Error("映射的 SSH 服务器不可用");
+      const remoteRoot = (await ctx.ui.input(`远端镜像目录（当前：${existing.remoteRoot}）`, existing.remoteRoot))?.trim() || existing.remoteRoot;
+      const localExcludeText = await ctx.ui.input("额外本地排除项（逗号分隔）", existing.localExcludePatterns.join(","));
+      const protectedText = await ctx.ui.input("远端保护路径（逗号分隔）", existing.remoteProtectedPatterns.join(","));
+      const debounceText = await ctx.ui.input("防抖毫秒数（250-30000）", String(existing.debounceMs));
       const debounceMs = Number(debounceText ?? existing.debounceMs);
-      if (!Number.isInteger(debounceMs) || debounceMs < 250 || debounceMs > 30_000) throw new Error("Mirror debounce must be from 250 to 30000 milliseconds");
+      if (!Number.isInteger(debounceMs) || debounceMs < 250 || debounceMs > 30_000) throw new Error("镜像防抖时间必须为 250 到 30000 毫秒");
       const split = (value: string | undefined) => (value ?? "").split(",").map((item) => item.trim()).filter(Boolean);
       const candidate: LocalProjectMapping = { ...existing, serverId: server.id, remoteRoot, localExcludePatterns: split(localExcludeText), remoteProtectedPatterns: split(protectedText), debounceMs, updatedAt: new Date().toISOString(), ...(server.id !== existing.serverId || remoteRoot !== existing.remoteRoot ? { markerId: randomUUID() } : {}) };
       await dependencies.replaceMapping?.(existing, candidate, ctx);
@@ -356,12 +356,12 @@ async function route(
     if (action === "rm" || action === "remove") { await dependencies.removeMapping?.(existing, ctx); return; }
     if (action === "pause") { await dependencies.pauseMapping?.(existing, ctx); return; }
     if (action === "resume") { await dependencies.resumeMapping?.(existing, ctx); return; }
-    throw new Error("Usage: /ssh map [add|show|edit|rm|pause|resume]");
+    throw new Error("用法：/ssh map [add|show|edit|rm|pause|resume]");
   }
   if (command === "sync") { await ctx.waitForIdle(); await dependencies.syncMapping?.(ctx); return; }
   if (command === "config") {
-    ctx.ui.notify("Use /aoliyougei-settings and open SSH Remote.", "info");
+    ctx.ui.notify("请使用 /aoliyougei-settings 并打开 SSH Remote 设置。", "info");
     return;
   }
-  throw new Error("Usage: /ssh [add|edit|rm|ls|test|config|map|sync]");
+  throw new Error("用法：/ssh [add|edit|rm|ls|test|config|map|sync]");
 }
