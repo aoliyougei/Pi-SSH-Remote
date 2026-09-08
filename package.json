@@ -16,7 +16,7 @@
     "build:all": "bun run clean:dist && bun run build:packages && bun run build:extensions",
     "build:packages": "bun run --cwd packages/shared-settings build && bun run --cwd packages/workspace-files build",
     "build:extensions": "bun run --cwd extensions/ssh-remote build",
-    "test": "bun run build:all && node --import tsx --test --test-isolation=process tests/shared-settings.test.ts tests/workspace-files.test.ts tests/ssh-remote-servers.test.ts tests/ssh-remote-mappings.test.ts tests/ssh-remote-manifest.test.ts tests/ssh-remote-sync.test.ts tests/ssh-remote-watcher.test.ts tests/ssh-remote-exec.test.ts tests/ssh-remote-mode-integration.test.ts tests/remote-resources.test.ts tests/ssh-remote.test.ts tests/ssh-remote-windows-integration.test.ts tests/packages.test.ts tests/git-install-contract.test.ts",
+    "test": "bun run build:all && node --import tsx --test --test-isolation=process tests/shared-settings.test.ts tests/workspace-files.test.ts tests/ssh-remote-servers.test.ts tests/ssh-remote-managed-key.test.ts tests/ssh-remote-mappings.test.ts tests/ssh-remote-manifest.test.ts tests/ssh-remote-sync.test.ts tests/ssh-remote-watcher.test.ts tests/ssh-remote-exec.test.ts tests/ssh-remote-mode-integration.test.ts tests/remote-resources.test.ts tests/ssh-remote.test.ts tests/ssh-remote-windows-integration.test.ts tests/packages.test.ts tests/git-install-contract.test.ts",
     "test:integration": "bun run build:packages && node --import tsx --test --test-isolation=process tests/ssh-remote-windows-integration.test.ts",
     "lint": "tsc --noEmit",
     "check:privacy": "bun run scripts/check-test-privacy.ts",
