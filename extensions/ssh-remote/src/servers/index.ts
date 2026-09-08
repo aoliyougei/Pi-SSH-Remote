@@ -1,4 +1,4 @@
-export type { SavedSshServer, SshServerStoreDocument } from "./types.ts";
+export type { SavedSshServer, SshAuthenticationPreference, SshServerStoreDocument } from "./types.ts";
 export {
   UnsupportedStoreVersionError,
   getServerStorePath,

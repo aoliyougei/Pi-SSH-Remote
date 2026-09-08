@@ -22,12 +22,13 @@ bun run test:integration # Windows integration tests (see below)
   output, and race handling;
   Windows CI also executes its real inherited-stdio regression fixture and the
   real local PowerShell/taskkill tree test in `ssh-remote.test.ts`.
-- `ssh-remote-servers.test.ts`, `ssh-remote-mappings.test.ts`,
+- `ssh-remote-servers.test.ts`, `ssh-remote-managed-key.test.ts`, `ssh-remote-ui-zh.test.ts`, `ssh-remote-mappings.test.ts`,
   `ssh-remote-sync.test.ts`, `ssh-remote-watcher.test.ts`,
   `ssh-remote-exec.test.ts`, and `ssh-remote-mode-integration.test.ts` cover
-  saved-server metadata, canonical project mappings, strict mirror planning,
-  protected paths, debounced generation queues, independent remote execution,
-  and isolation from full SSH workspace routing.
+  saved-server metadata and authentication preferences, transactional `0600`
+  managed keys, Chinese UI contracts, canonical project mappings, strict mirror
+  planning, protected paths, debounced generation queues, independent remote
+  execution, and isolation from full SSH workspace routing.
 - `remote-resources.test.ts` covers authorized remote AGENTS/skills staging and
   guards missing resource directories.
 - `ssh-remote-windows-integration.test.ts` — integration tests against a real

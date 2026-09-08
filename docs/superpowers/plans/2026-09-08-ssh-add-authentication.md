@@ -136,7 +136,7 @@ for (const bad of ["", ".", "..", "../key", "a/b", "a\\b", "a\nkey"]) {
 }
 ```
 
-Generate a temporary test-only key at runtime with `generateKeyPairSync()` and export it as unencrypted PKCS#8; do not commit key fixtures. Stage it, assert directory mode `0700`, file mode `0600`, then verify `rollback()` deletes a new file and restores an overwritten file byte-for-byte. Assert encrypted, public, invalid and >1 MiB inputs fail without including input contents in errors.
+Generate a temporary test-only RSA key at runtime with `generateKeyPairSync()` and export it as unencrypted PKCS#1; do not commit key fixtures. Stage it, assert directory mode `0700`, file mode `0600`, then verify `rollback()` deletes a new file and restores an overwritten file byte-for-byte. Assert encrypted, public, invalid and >1 MiB inputs fail without including input contents in errors.
 
 - [ ] **Step 2: Run the new test and verify RED**
 

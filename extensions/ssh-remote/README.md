@@ -180,6 +180,31 @@ saved test server. This mode is separate from `/ssh-connect`:
 
 Configure servers and mappings with:
 
+`/ssh add` now shows Chinese dialogs and uses
+`<PI_CODING_AGENT_DIR>/ssh/config` as the visible default OpenSSH config path
+(for example `/home/node/.pi/agent/ssh/config` in the standard container).
+Every new server explicitly selects **密码认证** or **密钥认证**:
+
+- Passwords reuse the existing password resolver. With **持久化密码** enabled
+  they are stored only in `<PI_CODING_AGENT_DIR>/ssh-remote-secrets.json`
+  (`0600`); otherwise they remain in process memory. Passwords never enter the
+  saved-server JSON.
+- Pasted private keys are managed under `<PI_CODING_AGENT_DIR>/ssh/<file>`.
+  The directory is forced to `0700`, keys to `0600`, names cannot contain path
+  separators, and symlinked managed directories or key files are rejected.
+  Existing files require confirmation before atomic replacement; failed
+  connection tests restore the old file or remove a newly-created one.
+- Encrypted private keys are intentionally rejected. Use SSH Agent or an
+  unencrypted dedicated deployment key instead.
+- OpenSSH and ssh2 both retain the selected authentication preference for
+  `/ssh test`, `ssh_exec`, `ssh_sync`, and later connections. Existing server
+  records without the new fields continue in `auto` mode.
+
+GitLab and GitHub SSH endpoints usually provide Git protocol access rather
+than a normal remote shell. They can be used by `git` through OpenSSH config,
+but should not be saved as `ssh_exec`/mirror hosts unless they actually provide
+a shell.
+
 ```text
 /ssh                         Open SSH management
 /ssh add                     Add and test a saved server

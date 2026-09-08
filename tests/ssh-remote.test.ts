@@ -2445,6 +2445,7 @@ test("explicit openssh retries a rejected password through sshpass and prompts u
 test("explicit openssh uses a cached password without prompting", async () => {
   const prompts: string[] = [];
   const created: Array<{ sshpassPassword?: string }> = [];
+  const runs: Array<string | undefined> = [];
   const client = createSshTransportClient(
     { target: "devbox" },
     {
@@ -2458,6 +2459,7 @@ test("explicit openssh uses a cached password without prompting", async () => {
           transport: "openssh",
           reusesConnection: false,
           run: async () => {
+            runs.push(sshpassPassword);
             if (!sshpassPassword) throw new Error("SSH command failed (255): Permission denied (publickey,password)");
             return { stdout: Buffer.from("ok"), stderr: Buffer.alloc(0), exitCode: 0 };
           },
@@ -2481,6 +2483,7 @@ test("explicit openssh uses a cached password without prompting", async () => {
   await client.runChecked("whoami");
   assert.deepEqual(prompts, []);
   assert.equal(created[1].sshpassPassword, "cached-pw");
+  assert.deepEqual(runs, ["cached-pw"]);
 });
 
 test("servers that reject password auth never trigger the prompt or the ssh2 fallback", async () => {

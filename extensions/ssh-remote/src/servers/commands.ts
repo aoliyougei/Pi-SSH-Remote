@@ -258,6 +258,7 @@ function listServers(dependencies: SshManagementCommandDependencies): string {
       server.name,
       ...(server.description ? [`  描述：${server.description}`] : []),
       `  目标：${displayTarget(server)}`,
+      `  认证方式：${server.authenticationPreference}${server.identityFile ? `（${server.identityFile}）` : ""}`,
       `  Shell：${server.shellPreference}`,
       `  传输方式：${server.transportPreference}`,
       `  已映射项目：${mappings}`,

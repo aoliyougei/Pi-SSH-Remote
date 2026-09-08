@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { generateKeyPairSync } from "node:crypto";
-import { existsSync, lstatSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, lstatSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
@@ -42,6 +42,19 @@ test("managed key transaction writes 0600 and rolls back new and overwritten fil
     assert.equal(lstatSync(path).mode & 0o777, 0o640);
   } finally {
     rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("managed key storage rejects a symlinked managed directory", async () => {
+  const root = mkdtempSync(join(tmpdir(), "ssh-managed-link-"));
+  const outside = mkdtempSync(join(tmpdir(), "ssh-managed-outside-"));
+  try {
+    symlinkSync(outside, join(root, "ssh"), "dir");
+    await assert.rejects(stageManagedKey("test_key", privateKey(), join(root, "ssh")), /托管目录/);
+    assert.equal(existsSync(join(outside, "test_key")), false);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+    rmSync(outside, { recursive: true, force: true });
   }
 });
 

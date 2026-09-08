@@ -435,6 +435,17 @@ class SshpassRetryClient implements SshRemoteClient {
 
   async run(command: string, options?: SshRunOptions): Promise<SshRunResult> {
     if (this.disposed) throw new Error("SSH client is closed");
+    if (this.tryCached && !await this.shouldDeferPasswordRetry()) {
+      this.tryCached = false;
+      const cached = this.cachedPassword();
+      if (cached !== undefined) {
+        this.sshpassAvailable = await this.detectSshpass();
+        if (this.sshpassAvailable) {
+          await this.rebuildWithPassword(cached);
+          this.triedPassword = true;
+        }
+      }
+    }
     for (let attempt = 0; ; attempt++) {
       if (this.cancelled) {
         // The user dismissed the prompt: fail fast so no later candidate

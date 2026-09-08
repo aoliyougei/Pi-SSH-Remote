@@ -74,6 +74,10 @@ export async function stageManagedKey(
   const name = validateManagedKeyName(fileName);
   await validatePrivateKey(contents);
   mkdirSync(directory, { recursive: true, mode: 0o700 });
+  const directoryStat = lstatSync(directory);
+  if (!directoryStat.isDirectory() || directoryStat.isSymbolicLink()) {
+    throw new Error("SSH 密钥托管目录必须是普通目录，不能是符号链接");
+  }
   chmodSync(directory, 0o700);
   const path = join(directory, name);
   if (resolve(path) !== join(resolve(directory), name)) throw new Error("密钥文件路径超出托管目录");
