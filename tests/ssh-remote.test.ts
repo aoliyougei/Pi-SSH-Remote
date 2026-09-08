@@ -4875,7 +4875,7 @@ test("SSH commands stay available while local sessions keep AI controls disabled
     assert.equal(harness.tools.has(name), false);
   }
   await harness.commands.get("ssh-status").handler("", harness.ctx);
-  assert.match(harness.notifications.at(-1)?.message ?? "", /Workspace: local/);
+  assert.match(harness.notifications.at(-1)?.message ?? "", /工作区：本地/);
 });
 
 test("ssh-forget-password scopes deletion to this session unless all is requested", async () => {
@@ -4914,7 +4914,7 @@ test("ssh-forget-password scopes deletion to this session unless all is requeste
     assert.deepEqual(JSON.parse(readFileSync(secretsPath, "utf8")), initialSecrets);
     assert.match(
       harness.notifications.at(-1)?.message ?? "",
-      /Usage: \/ssh-forget-password \[all\]/,
+      /用法：\/ssh-forget-password \[all\]/,
     );
 
     await harness.commands.get("ssh-forget-password").handler("", harness.ctx);
@@ -4923,14 +4923,14 @@ test("ssh-forget-password scopes deletion to this session unless all is requeste
     });
     assert.match(
       harness.notifications.at(-1)?.message ?? "",
-      /Forgot 1 cached SSH password used by this session/,
+      /已清除当前会话使用的 1 个 SSH 缓存密码/,
     );
 
     await harness.commands.get("ssh-forget-password").handler("all", harness.ctx);
     assert.deepEqual(JSON.parse(readFileSync(secretsPath, "utf8")), {});
     assert.match(
       harness.notifications.at(-1)?.message ?? "",
-      /Forgot 1 cached SSH password across all sessions/,
+      /已清除全部会话中的 1 个 SSH 缓存密码/,
     );
   } finally {
     rmSync(directory, { recursive: true, force: true });
@@ -4983,7 +4983,7 @@ test("unified --ssh targets carry their port into clients, status, and reconnect
   await harness.commands.get("ssh-status").handler("", harness.ctx);
   assert.match(
     harness.notifications.at(-1)?.message ?? "",
-    /target: deploy@devbox.*port: 2201/s,
+    /SSH 目标：deploy@devbox.*端口：2201/s,
   );
 
   await harness.commands.get("ssh-reconnect").handler("", harness.ctx);
@@ -5046,7 +5046,7 @@ test("resumed sessions reuse their stored SSH port and reject explicit conflicts
     conflicting.notifications.at(-1)?.message ?? "",
     /bound to devbox:2201:\/srv\/project/,
   );
-  assert.equal(conflicting.statuses.get("ssh-remote"), "SSH: Disconnected");
+  assert.equal(conflicting.statuses.get("ssh-remote"), "SSH： 已断开");
   await conflicting.emit("session_shutdown", { reason: "quit" });
 });
 
@@ -5080,7 +5080,7 @@ test("SSH commands appear for remote sessions and reconnect the active target", 
 
   await harness.emit("session_start", { reason: "startup" });
   await harness.commands.get("ssh-status").handler("", harness.ctx);
-  assert.match(harness.notifications.at(-1)?.message ?? "", /target: devbox/);
+  assert.match(harness.notifications.at(-1)?.message ?? "", /SSH 目标：devbox/);
 
   await harness.commands.get("ssh-reconnect").handler("", harness.ctx);
   assert.equal(clients.length, 2);
@@ -5100,10 +5100,10 @@ test("ssh-status live-checks reachability and fails closed after a reboot", asyn
   client.reachable = false;
   await harness.commands.get("ssh-status").handler("", harness.ctx);
 
-  assert.equal(harness.statuses.get("ssh-remote"), "SSH: Disconnected");
+  assert.equal(harness.statuses.get("ssh-remote"), "SSH： 已断开");
   assert.match(
     harness.notifications.at(-1)?.message ?? "",
-    /Workspace: SSH unavailable.*target: router.*connection closed/is,
+    /工作区：SSH 不可用.*目标：router.*connection closed/is,
   );
   assert.deepEqual(client.disposeOptions, [{ preserveBackgroundSessions: true }]);
   await assert.rejects(
@@ -5141,7 +5141,7 @@ test("foreground SSH transport failures update the footer immediately", async ()
     /connection closed/i,
   );
 
-  assert.equal(harness.statuses.get("ssh-remote"), "SSH: Disconnected");
+  assert.equal(harness.statuses.get("ssh-remote"), "SSH： 已断开");
   await harness.emit("session_shutdown", { reason: "quit" });
 });
 
@@ -5154,12 +5154,12 @@ test("persistent SSH disconnect events update the footer without polling", async
   })(harness.pi);
 
   await harness.emit("session_start", { reason: "startup" });
-  assert.equal(harness.statuses.get("ssh-remote"), "SSH: Connected");
+  assert.equal(harness.statuses.get("ssh-remote"), "SSH： 已连接");
   client.emitDisconnect();
 
-  assert.equal(harness.statuses.get("ssh-remote"), "SSH: Disconnected");
+  assert.equal(harness.statuses.get("ssh-remote"), "SSH： 已断开");
   assert.ok(harness.notifications.some((notification) =>
-    /SSH connection lost:.*connection closed/i.test(notification.message)
+    /SSH 连接已断开：.*connection closed/i.test(notification.message)
   ));
   await harness.emit("session_shutdown", { reason: "quit" });
 });
@@ -5184,7 +5184,7 @@ test("local sessions can connect and explicitly exit without resuming the old SS
   assert.equal(harness.getIdleWaits(), 1);
   assert.equal(clients.length, 1);
   assert.equal(findSshSessionState(harness.entries)?.target, "devbox");
-  assert.equal(harness.statuses.get("ssh-remote"), "SSH: Connected");
+  assert.equal(harness.statuses.get("ssh-remote"), "SSH： 已连接");
 
   await harness.commands.get("ssh-exit").handler("", harness.ctx);
   assert.equal(harness.getIdleWaits(), 2);
@@ -5238,7 +5238,7 @@ test("session tree navigation restores the branch-specific local or SSH environm
   harness.setBranch(remoteBranch);
   await harness.emit("session_tree", { newLeafId: "remote", oldLeafId: "local" });
   assert.equal(clients.length, 2);
-  assert.equal(harness.statuses.get("ssh-remote"), "SSH: Connected");
+  assert.equal(harness.statuses.get("ssh-remote"), "SSH： 已连接");
   assert.equal(findSshSessionState(harness.entries)?.remoteCwd, "/srv/project");
 });
 
@@ -5286,7 +5286,7 @@ test("failed session-tree host switches fail closed instead of restoring the old
   assert.equal(clients.length, 2);
   assert.equal(clients[0].disposed, true, "the old branch connection must be closed");
   assert.equal(clients[1].disposed, true, "the failed candidate must be closed");
-  assert.equal(harness.statuses.get("ssh-remote"), "SSH: Disconnected");
+  assert.equal(harness.statuses.get("ssh-remote"), "SSH： 已断开");
   await assert.rejects(
     () => harness.tools.get("bash").execute(
       "bash-after-tree-switch-failure",
@@ -5425,8 +5425,8 @@ test("AI control setting exposes sequential SSH environment tools without built-
     undefined,
     harness.ctx,
   );
-  assert.match(status.content[0].text, /Workspace: SSH/);
-  assert.match(status.content[0].text, /target: devbox/);
+  assert.match(status.content[0].text, /工作区：SSH/);
+  assert.match(status.content[0].text, /SSH 目标：devbox/);
 
   const exited = await harness.tools.get("ssh_exit").execute(
     "ssh-exit-ai",
@@ -5435,7 +5435,7 @@ test("AI control setting exposes sequential SSH environment tools without built-
     undefined,
     harness.ctx,
   );
-  assert.match(exited.content[0].text, /Local workspace active/);
+  assert.match(exited.content[0].text, /本地工作区已启用/);
   assert.equal(findSshEnvironmentState(harness.entries)?.mode, "local");
   assert.ok(harness.events.some((event) =>
     event.name === "ssh-remote:environment"
@@ -5528,7 +5528,7 @@ test("ssh-connect switches active hosts directly and preserves the old host on f
   assert.deepEqual(clients[3].disposeOptions, [undefined]);
   assert.equal(findSshSessionState(harness.entries)?.target, "host-c");
   assert.equal(findSshSessionState(harness.entries)?.remoteCwd, "/srv/c");
-  assert.equal(harness.statuses.get("ssh-remote"), "SSH: Connected");
+  assert.equal(harness.statuses.get("ssh-remote"), "SSH： 已连接");
   assert.equal(
     harness.entries.filter((entry: any) =>
       entry.customType === SSH_SESSION_STATE_TYPE
@@ -5550,8 +5550,8 @@ test("ssh-connect switches active hosts directly and preserves the old host on f
     undefined,
     harness.ctx,
   );
-  assert.match(status.content[0].text, /target: host-c/);
-  assert.match(status.content[0].text, /cwd: \/srv\/c/);
+  assert.match(status.content[0].text, /SSH 目标：host-c/);
+  assert.match(status.content[0].text, /cwd：\/srv\/c/);
 });
 
 test("AI password auth setting fails immediately while manual password prompts remain available", async () => {
@@ -5625,7 +5625,7 @@ test("AI password auth setting fails immediately while manual password prompts r
   );
   assert.equal(harness.inputCalls.length, 1);
   assert.equal(harness.inputCalls[0].options, undefined);
-  assert.equal(harness.statuses.get("ssh-remote"), "SSH: Connected");
+  assert.equal(harness.statuses.get("ssh-remote"), "SSH： 已连接");
   assert.equal(findSshSessionState(harness.entries)?.target, "deploy@devbox");
 });
 
@@ -5688,9 +5688,9 @@ test("AI ssh_connect times password input out and automatically restores local",
   assert.equal(harness.inputCalls.length, 1);
   assert.equal(
     harness.inputCalls[0].title,
-    "SSH password for deploy@password-host:22",
+    "请输入 deploy@password-host:22 的 SSH 密码",
   );
-  assert.equal(harness.inputCalls[0].placeholder, "Enter the SSH password");
+  assert.equal(harness.inputCalls[0].placeholder, "请输入 SSH 密码");
   assert.equal(harness.inputCalls[0].options?.timeout, 10);
   assert.equal(harness.inputCalls[0].options?.signal?.aborted, true);
   assert.ok(updates.some((update) =>
@@ -5718,7 +5718,7 @@ test("AI ssh_connect times password input out and automatically restores local",
     undefined,
     harness.ctx,
   );
-  assert.match(status.content[0].text, /Workspace: local/i);
+  assert.match(status.content[0].text, /工作区：本地/i);
 });
 
 test("manual ssh-connect password prompts have no timeout and stay disconnected on failure", async () => {
@@ -5763,7 +5763,7 @@ test("manual ssh-connect password prompts have no timeout and stay disconnected 
 
   assert.equal(harness.inputCalls.length, 1);
   assert.equal(harness.inputCalls[0].options, undefined);
-  assert.equal(harness.statuses.get("ssh-remote"), "SSH: Disconnected");
+  assert.equal(harness.statuses.get("ssh-remote"), "SSH： 已断开");
   assert.notEqual(findSshEnvironmentState(harness.entries)?.mode, "local");
   assert.equal(
     harness.events.some((event) =>
@@ -5929,7 +5929,7 @@ test("ssh-cd treats absolute paths as remote and preserves cwd on failure", asyn
     "a failed change must preserve the previous remote cwd",
   );
   assert.equal(harness.getSessionName(), sessionNameBeforeFailure);
-  assert.equal(harness.statuses.get("ssh-remote"), "SSH: Connected");
+  assert.equal(harness.statuses.get("ssh-remote"), "SSH： 已连接");
   assert.equal(
     harness.entries.filter((entry: any) =>
       entry.customType === SSH_SESSION_STATE_TYPE
@@ -6125,7 +6125,7 @@ test("startup connection failure leaves the session alive for reconnect", async 
   assert.equal(clients.length, 2);
   assert.equal(clients[0].disposed, false);
   assert.equal(clients[1].disposed, true);
-  assert.equal(harness.statuses.get("ssh-remote"), "SSH: Connected");
+  assert.equal(harness.statuses.get("ssh-remote"), "SSH： 已连接");
   assert.ok(
     harness.notifications.some((n) => n.message.includes("temporary failure")),
   );
@@ -6138,7 +6138,7 @@ test("startup connection failure leaves the session alive for reconnect", async 
   assert.equal(clients[0].disposed, true);
   assert.equal(clients[2].disposed, false);
   assert.ok(
-    harness.notifications.some((n) => n.message.includes("SSH remote active")),
+    harness.notifications.some((n) => n.message.includes("SSH 远端已启用")),
   );
 });
 
@@ -6425,10 +6425,10 @@ test("extension persists, routes, prompts, and restores an SSH workspace", async
   assert.equal(saved?.target, "devbox");
   assert.equal(saved?.remoteCwd, "/srv/project");
   assert.equal(harness.getSessionName(), "SSH devbox:/srv/project (main)");
-  assert.equal(harness.statuses.get("ssh-remote"), "SSH: Connected");
-  assert.ok(harness.themeCalls.some((call) => call.color === "muted" && call.text === "SSH:"));
-  assert.ok(harness.themeCalls.some((call) => call.color === "warning" && call.text === "Connecting"));
-  assert.ok(harness.themeCalls.some((call) => call.color === "success" && call.text === "Connected"));
+  assert.equal(harness.statuses.get("ssh-remote"), "SSH： 已连接");
+  assert.ok(harness.themeCalls.some((call) => call.color === "muted" && call.text === "SSH："));
+  assert.ok(harness.themeCalls.some((call) => call.color === "warning" && call.text === "连接中"));
+  assert.ok(harness.themeCalls.some((call) => call.color === "success" && call.text === "已连接"));
   assert.ok(harness.events.some((event) => event.name === "bg:register"));
   const bash = harness.tools.get("bash");
   assert.match(bash.parameters.properties.timeout.description, /no default timeout/i);
@@ -6865,7 +6865,7 @@ test("ash-only sh sessions survive resume", async () => {
     clients[0].calls.some((call) => call.command.startsWith("command -v sh")),
   );
   assert.equal(findSshSessionState(harness.entries)?.remoteShell, "sh");
-  assert.equal(harness.statuses.get("ssh-remote"), "SSH: Connected");
+  assert.equal(harness.statuses.get("ssh-remote"), "SSH： 已连接");
   const context = await harness.emit("context", { messages: [] }) as {
     messages: Array<{ content: string }>;
   };
@@ -6919,8 +6919,8 @@ test("resumed sessions reconnect without --ssh and reject a different target", a
   })(conflicting.pi);
   await conflicting.emit("session_start", { reason: "resume" });
   assert.match(conflicting.notifications.at(-1)?.message ?? "", /bound to devbox:\/srv\/project/);
-  assert.equal(conflicting.statuses.get("ssh-remote"), "SSH: Disconnected");
-  assert.ok(conflicting.themeCalls.some((call) => call.color === "error" && call.text === "Disconnected"));
+  assert.equal(conflicting.statuses.get("ssh-remote"), "SSH： 已断开");
+  assert.ok(conflicting.themeCalls.some((call) => call.color === "error" && call.text === "已断开"));
   await assert.rejects(
     conflicting.tools.get("read").execute(
       "blocked-read",
@@ -6962,9 +6962,9 @@ test("password resolver caches, persists, rejects, and forgets", async () => {
   // Prompt on first use, then serve from memory.
   assert.equal(await resolver.resolvePassword(endpoint), "pw1");
   assert.equal(resolver.cachedPassword(endpoint), "pw1");
-  assert.deepEqual(prompts, ["SSH password for deploy@devbox:22"]);
+  assert.deepEqual(prompts, ["请输入 deploy@devbox:22 的 SSH 密码"]);
   assert.equal(await resolver.resolvePassword(endpoint), "pw1");
-  assert.deepEqual(prompts, ["SSH password for deploy@devbox:22"]);
+  assert.deepEqual(prompts, ["请输入 deploy@devbox:22 的 SSH 密码"]);
 
   // POSIX creates the secrets file with 0600. Windows uses inherited ACLs
   // and Node reports synthetic POSIX mode bits, so only persistence is
@@ -7047,7 +7047,7 @@ test("password resolver surfaces the transport rejection in the prompt and a not
     "root@router: Permission denied (publickey,password).",
   );
   assert.equal(prompts.length, 1);
-  assert.equal(prompts[0], "SSH password for root@router:22");
+  assert.equal(prompts[0], "请输入 root@router:22 的 SSH 密码");
   assert.equal(notifications.length, 0);
 
   // Second failure: the typed password was rejected, so the rejection is
@@ -7058,7 +7058,7 @@ test("password resolver surfaces the transport rejection in the prompt and a not
   );
   assert.ok(
     notifications.some(
-      ([message, type]) => type === "warning" && /SSH password rejected:.*Permission denied/.test(message),
+      ([message, type]) => type === "warning" && /SSH 密码被拒绝：.*Permission denied/.test(message),
     ),
   );
   rmSync(directory, { recursive: true, force: true });

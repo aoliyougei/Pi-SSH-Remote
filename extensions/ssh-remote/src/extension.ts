@@ -1201,7 +1201,7 @@ export function createSshRemoteExtension(
               : "OpenSSH/single-use"
             : "custom transport";
         ctx.ui.notify(
-          `SSH remote active: ${formatRemoteLocation(session)} `
+          `SSH 远端已启用：${formatRemoteLocation(session)} `
             + `(${session.remotePlatform}/${session.remoteShell}; ${transportLabel})`,
           "info",
         );
@@ -2218,8 +2218,8 @@ export function createSshRemoteExtension(
             content: [{
               type: "text",
               text: changed
-                ? `Local workspace active: ${ctx.cwd}`
-                : `Workspace already local: ${ctx.cwd}`,
+                ? `本地工作区已启用：${ctx.cwd}`
+                : `工作区已经是本地：${ctx.cwd}`,
             }],
             details: { action: "exit", cwd: ctx.cwd, changed },
           };
