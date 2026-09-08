@@ -1,6 +1,7 @@
 import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
 import { selectRemoteAdapter, type RemoteAdapter, type RemoteWorkspace } from "../adapters/index.ts";
-import { createSshTransportClient, type SshPasswordProvider } from "../transport/index.ts";
+import { createSshTransportClient, openSshPasswordEndpoint, type SshPasswordProvider } from "../transport/index.ts";
+import { parseOpenSshConfig, runLocalCommand } from "../transport/ssh2-config.ts";
 import type { SshRemoteClient } from "../transport/client.ts";
 import { SshPasswordResolver } from "../transport/password-resolver.ts";
 import type { SavedSshServer } from "./types.ts";
@@ -60,6 +61,28 @@ export class ServerConnectionPool {
 
   private key(server: SavedSshServer): string { return `${server.id}\0${server.updatedAt}`; }
 
+  async rememberPassword(server: SavedSshServer, password: string): Promise<void> {
+    this.passwordResolver.rememberPassword(openSshPasswordEndpoint(server.target, server.port), password);
+    const executable = this.platform === "win32" ? "ssh.exe" : "ssh";
+    const args: string[] = [];
+    if (server.configFile) args.push("-F", server.configFile);
+    if (server.port !== undefined) args.push("-p", String(server.port));
+    args.push("-G", server.target);
+    try {
+      const result = await runLocalCommand(executable, args, 15_000);
+      if (result.exitCode !== 0) return;
+      const config = parseOpenSshConfig(result.stdout.toString("utf8"));
+      const host = config.get("hostname")?.[0];
+      const username = config.get("user")?.[0];
+      const port = Number(config.get("port")?.[0] ?? 22);
+      if (host && username && Number.isInteger(port) && port >= 1 && port <= 65_535) {
+        this.passwordResolver.rememberPassword({ hostLabel: `${username}@${host}:${port}`, username, host, port }, password);
+      }
+    } catch {
+      // The raw target remains cached and is sufficient for OpenSSH fallback.
+    }
+  }
+
   private passwordProvider(ctx: ExtensionContext): SshPasswordProvider | undefined {
     if (!this.passwordEnabled()) { this.passwordResolver.setUI(undefined); return undefined; }
     this.passwordResolver.setUI(ctx.hasUI ? {
@@ -85,6 +108,8 @@ export class ServerConnectionPool {
       target: server.target,
       port: server.port,
       configFile: server.configFile,
+      authenticationPreference: server.authenticationPreference,
+      identityFile: server.identityFile,
       executable: this.platform === "win32" ? "ssh.exe" : undefined,
       connectTimeoutSeconds: 10,
       batchMode: true,

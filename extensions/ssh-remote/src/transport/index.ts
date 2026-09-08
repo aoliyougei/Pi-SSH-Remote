@@ -100,7 +100,7 @@ async function detectProxyJumpDefault(
  * transports. Targets without an explicit user keep the raw target unless a
  * port is known (the effective user is only known to ssh -G).
  */
-function opensshPasswordEndpoint(
+export function openSshPasswordEndpoint(
   target: string,
   explicitPort?: number,
 ): SshPasswordEndpoint {
@@ -338,7 +338,7 @@ class SshpassRetryClient implements SshRemoteClient {
   }
 
   private endpoint(): SshPasswordEndpoint {
-    return opensshPasswordEndpoint(
+    return openSshPasswordEndpoint(
       this.openSshOptionsValue.target,
       this.openSshOptionsValue.port,
     );

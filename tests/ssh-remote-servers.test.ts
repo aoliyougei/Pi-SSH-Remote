@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
@@ -55,6 +55,39 @@ test("server store drops credential-shaped unknown fields and writes atomically"
     assert.deepEqual(loadServerStore(path), { version: 1, servers: [] });
     assert.throws(() => normalizeServerStore({ version: 2, servers: [] }), UnsupportedStoreVersionError);
   } finally { rmSync(root, { recursive: true, force: true }); }
+});
+
+test("password resolver remembers selected passwords according to persistence", () => {
+  const root = mkdtempSync(join(tmpdir(), "ssh-password-store-"));
+  const endpoint = { hostLabel: "deploy@devbox:22", username: "deploy", host: "devbox", port: 22 };
+  try {
+    const memoryPath = join(root, "memory.json");
+    const memory = new SshPasswordResolver({ persistPasswords: false, secretsPath: memoryPath });
+    memory.rememberPassword(endpoint, "memory-only");
+    assert.equal(memory.cachedPassword(endpoint), "memory-only");
+    assert.equal(readFileSync(memoryPath, { encoding: "utf8", flag: "a+" }), "");
+
+    const persistedPath = join(root, "persisted.json");
+    const persisted = new SshPasswordResolver({ persistPasswords: true, secretsPath: persistedPath });
+    persisted.rememberPassword(endpoint, "persisted-test-value");
+    assert.equal(JSON.parse(readFileSync(persistedPath, "utf8"))[endpoint.hostLabel], "persisted-test-value");
+    assert.equal(statSync(persistedPath).mode & 0o777, 0o600);
+    assert.throws(() => persisted.rememberPassword(endpoint, ""), /密码不能为空/);
+  } finally { rmSync(root, { recursive: true, force: true }); }
+});
+
+test("server pool passes saved authentication options to transport", async () => {
+  let options: any;
+  const pool = new ServerConnectionPool({
+    passwordResolver: new SshPasswordResolver({ persistPasswords: false, secretsPath: join(tmpdir(), "unused-secrets.json") }),
+    createClient: ((value: any) => { options = value; return { options: value, dispose: async () => {} }; }) as any,
+    selectRemote: async () => ({ adapter: {} as any, workspace: { platform: "unix", shell: "bash", home: "/home/deploy", cwd: "/home/deploy" } }),
+  });
+  const lease = await pool.acquire({ ...fixtureServer(), authenticationPreference: "key", identityFile: "/home/deploy/.ssh/test_key" }, ctx);
+  assert.equal(options.authenticationPreference, "key");
+  assert.equal(options.identityFile, "/home/deploy/.ssh/test_key");
+  await lease.release();
+  await pool.shutdown();
 });
 
 test("server pool deduplicates setup and retires changed generations", async () => {

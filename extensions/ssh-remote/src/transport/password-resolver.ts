@@ -131,6 +131,16 @@ export class SshPasswordResolver {
       ?? (this.persist ? readSecrets(this.secretsPath)[endpoint.hostLabel] : undefined);
   }
 
+  rememberPassword(endpoint: SshPasswordEndpoint, password: string): void {
+    if (!password) throw new Error("SSH 密码不能为空");
+    this.sessionHostLabels.add(endpoint.hostLabel);
+    this.memory.set(endpoint.hostLabel, password);
+    if (!this.persist) return;
+    const secrets = readSecrets(this.secretsPath);
+    secrets[endpoint.hostLabel] = password;
+    writeSecrets(this.secretsPath, secrets);
+  }
+
   private async promptPassword(
     title: string,
     controls: SshPasswordPromptControls,
