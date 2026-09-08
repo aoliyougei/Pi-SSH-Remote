@@ -564,6 +564,7 @@ function resolveAgentPath(
 }
 
 async function buildAuthentication(
+  options: SshClientOptions,
   config: ParsedOpenSshConfig,
   platform: NodeJS.Platform,
   env: NodeJS.ProcessEnv,
@@ -582,10 +583,14 @@ async function buildAuthentication(
     }
   }
 
-  const methods: AnyAuthMethod[] = [{ type: "none", username }];
+  const keyMethods: AnyAuthMethod[] = [];
   const warnings: string[] = [];
   let encryptedKeys = 0;
-  for (const configuredPath of config.get("identityfile") ?? []) {
+  const identityPaths = [
+    ...(options.authenticationPreference === "key" && options.identityFile ? [options.identityFile] : []),
+    ...(config.get("identityfile") ?? []),
+  ].filter((value, index, values) => values.indexOf(value) === index);
+  for (const configuredPath of identityPaths) {
     if (configuredPath.toLowerCase() === "none") continue;
     const path = expandHome(configuredPath, home);
     let contents: Buffer;
@@ -603,16 +608,17 @@ async function buildAuthentication(
     const keys = Array.isArray(parsed) ? parsed : [parsed];
     for (const key of keys) {
       if (!key.isPrivateKey()) continue;
-      methods.push({ type: "publickey", username, key });
+      keyMethods.push({ type: "publickey", username, key });
     }
   }
 
   const identitiesOnly = enabled(first(config, "identitiesonly"));
   const agentPath = resolveAgentPath(config, platform, env, home);
-  if (!identitiesOnly && agentPath) {
-    methods.push({ type: "agent", username, agent: createAgent(agentPath) });
-  } else if (identitiesOnly && encryptedKeys > 0) {
-    if (methods.length === 1) {
+  const agentMethods: AnyAuthMethod[] = !identitiesOnly && agentPath
+    ? [{ type: "agent", username, agent: createAgent(agentPath) }]
+    : [];
+  if (identitiesOnly && encryptedKeys > 0) {
+    if (keyMethods.length === 0) {
       throw new Ssh2CompatibilityError(
         "ssh2 cannot combine IdentitiesOnly=yes with encrypted IdentityFile keys through the agent",
         ["IdentitiesOnly=yes with encrypted keys"],
@@ -623,10 +629,15 @@ async function buildAuthentication(
     );
   }
 
-  if (password) {
-    // Password auth runs last so public keys and the agent still win.
-    methods.push({ type: "password", username, password });
-  }
+  const passwordMethods: AnyAuthMethod[] = password
+    ? [{ type: "password", username, password }]
+    : [];
+  const methods: AnyAuthMethod[] = [
+    { type: "none", username },
+    ...(options.authenticationPreference === "password"
+      ? [...passwordMethods, ...keyMethods, ...agentMethods]
+      : [...keyMethods, ...agentMethods, ...passwordMethods]),
+  ];
 
   if (methods.length === 1) {
     if (allowPasswordPrompt) {
@@ -757,6 +768,7 @@ async function resolveSsh2Endpoint(
     ? await context.passwordFor({ hostLabel: `${username}@${host}:${port}`, username, host, port })
     : undefined;
   const authentication = await buildAuthentication(
+    context.options,
     openSsh,
     context.platform,
     context.env,

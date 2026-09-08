@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { generateKeyPairSync } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import {
   spawn as spawnChild,
@@ -875,6 +876,25 @@ test("ssh2 config uses ssh -G, OpenSSH known_hosts, agent auth, and algorithm in
   } finally {
     rmSync(directory, { recursive: true, force: true });
   }
+});
+
+test("ssh2 authentication preference orders password and explicit identity first", async () => {
+  const directory = mkdtempSync(join(tmpdir(), "pi-ssh2-auth-order-"));
+  const knownHosts = join(directory, "known_hosts");
+  const identityFile = join(directory, "identity");
+  const pair = generateKeyPairSync("rsa", { modulusLength: 2048 });
+  writeFileSync(identityFile, pair.privateKey.export({ format: "pem", type: "pkcs1" }));
+  writeFileSync(knownHosts, "placeholder\n");
+  const hostKey = Buffer.from("test-host-key-blob");
+  const runLocal = async (_executable: string, args: readonly string[]) => args.includes("-G") ? {
+    stdout: Buffer.from(["user deploy", "hostname server.example.test", "port 22", "identityagent SSH_AUTH_SOCK", `userknownhostsfile ${knownHosts}`, "globalknownhostsfile none", "pubkeyauthentication true", "identitiesonly no"].join("\n") + "\n"), stderr: Buffer.alloc(0), exitCode: 0,
+  } : { stdout: Buffer.from(`server.example.test ssh-rsa ${hostKey.toString("base64")}\n`), stderr: Buffer.alloc(0), exitCode: 0 };
+  try {
+    const password = await resolveSsh2Connection({ target: "alias", authenticationPreference: "password" }, { platform: "linux", home: directory, env: { SSH_AUTH_SOCK: "/tmp/test-agent" }, runLocal, passwordFor: () => "test-password" });
+    assert.deepEqual((password.config.authHandler as Array<{ type: string }>).map(({ type }) => type), ["none", "password", "agent"]);
+    const key = await resolveSsh2Connection({ target: "alias", authenticationPreference: "key", identityFile }, { platform: "linux", home: directory, env: { SSH_AUTH_SOCK: "/tmp/test-agent" }, runLocal, passwordFor: () => "test-password" });
+    assert.deepEqual((key.config.authHandler as Array<{ type: string }>).map(({ type }) => type), ["none", "publickey", "agent", "password"]);
+  } finally { rmSync(directory, { recursive: true, force: true }); }
 });
 
 test("ssh2 applies an explicit target port to ssh -G and known_hosts lookups", async () => {
