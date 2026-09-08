@@ -7,10 +7,11 @@ import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
 import { ServerConnectionPool } from "../extensions/ssh-remote/src/servers/connection-pool.ts";
 import { loadServerStore, normalizeServerStore, saveServerStore, UnsupportedStoreVersionError } from "../extensions/ssh-remote/src/servers/store.ts";
 import type { SavedSshServer } from "../extensions/ssh-remote/src/servers/types.ts";
+import { buildSshArguments } from "../extensions/ssh-remote/src/transport/client.ts";
 import { SshPasswordResolver } from "../extensions/ssh-remote/src/transport/password-resolver.ts";
 
 function fixtureServer(id = "server-1", updatedAt = "2026-01-01T00:00:00.000Z"): SavedSshServer {
-  return { version: 1, id, name: id, target: "deploy@devbox", shellPreference: "auto", transportPreference: "auto", createdAt: "2026-01-01T00:00:00.000Z", updatedAt };
+  return { version: 1, id, name: id, target: "deploy@devbox", authenticationPreference: "auto", shellPreference: "auto", transportPreference: "auto", createdAt: "2026-01-01T00:00:00.000Z", updatedAt };
 }
 
 const ctx = { hasUI: false, ui: { input: async () => undefined, notify: () => {} } } as unknown as ExtensionContext;
@@ -20,6 +21,25 @@ test("server store rejects duplicate names case-insensitively", () => {
     { ...fixtureServer("a"), name: "Test-API" },
     { ...fixtureServer("b"), name: "test-api" },
   ] }), /duplicate SSH server name/i);
+});
+
+test("server store normalizes legacy authentication and validates key identity", () => {
+  const { authenticationPreference: _authenticationPreference, ...legacy } = fixtureServer();
+  const normalized = normalizeServerStore({ version: 1, servers: [legacy] });
+  assert.equal(normalized.servers[0].authenticationPreference, "auto");
+  assert.equal(normalized.servers[0].identityFile, undefined);
+  assert.throws(() => normalizeServerStore({ version: 1, servers: [{
+    ...fixtureServer(), authenticationPreference: "key",
+  }] }), /identity/i);
+});
+
+test("OpenSSH arguments honor explicit authentication preference", () => {
+  const password = buildSshArguments({ target: "deploy@devbox", authenticationPreference: "password" });
+  assert.ok(password.includes("PreferredAuthentications=password,keyboard-interactive,publickey"));
+
+  const key = buildSshArguments({ target: "deploy@devbox", authenticationPreference: "key", identityFile: "/home/deploy/.ssh/test_key" });
+  assert.deepEqual(key.slice(0, 6), ["-i", "/home/deploy/.ssh/test_key", "-o", "IdentitiesOnly=no", "-o", "PreferredAuthentications=publickey,password,keyboard-interactive"]);
+  assert.throws(() => buildSshArguments({ target: "deploy@devbox", authenticationPreference: "key" }), /identity/i);
 });
 
 test("server store drops credential-shaped unknown fields and writes atomically", () => {

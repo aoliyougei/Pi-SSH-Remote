@@ -16,7 +16,8 @@ import {
   type FSWatcher,
 } from "node:fs";
 import { tmpdir } from "node:os";
-import { dirname, join } from "node:path";
+import { dirname, isAbsolute, join, win32 } from "node:path";
+import type { SshAuthenticationPreference } from "../servers/types.ts";
 
 export type SshTransportPreference = "auto" | "openssh" | "ssh2";
 export type SshTransportKind = Exclude<SshTransportPreference, "auto">;
@@ -26,6 +27,8 @@ export interface SshClientOptions {
   /** Explicit destination port parsed from the unified SSH target syntax. */
   port?: number;
   configFile?: string;
+  authenticationPreference?: SshAuthenticationPreference;
+  identityFile?: string;
   executable?: string;
   connectTimeoutSeconds?: number;
   batchMode?: boolean;
@@ -186,6 +189,17 @@ export function buildSshArguments(
 
   const args: string[] = [];
   if (options.configFile) args.push("-F", options.configFile);
+  if (options.authenticationPreference === "key") {
+    if (!options.identityFile || (!isAbsolute(options.identityFile) && !win32.isAbsolute(options.identityFile))) {
+      throw new Error("SSH key authentication requires an absolute identity file");
+    }
+    args.push("-i", options.identityFile, "-o", "IdentitiesOnly=no");
+  }
+  if (options.authenticationPreference === "password") {
+    args.push("-o", "PreferredAuthentications=password,keyboard-interactive,publickey");
+  } else if (options.authenticationPreference === "key") {
+    args.push("-o", "PreferredAuthentications=publickey,password,keyboard-interactive");
+  }
   if (port !== undefined) args.push("-p", String(port));
   if (options.multiplex === true) {
     if (!options.controlPath) {

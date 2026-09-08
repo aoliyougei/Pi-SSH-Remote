@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs";
-import { dirname, join } from "node:path";
+import { dirname, isAbsolute, join, win32 } from "node:path";
 import { getAgentDir } from "@earendil-works/pi-coding-agent";
 import type { SshShellPreference } from "../adapters/types.ts";
 import type { SshTransportPreference } from "../transport/client.ts";
@@ -8,6 +8,7 @@ import {
   SSH_SERVER_STORE_VERSION,
   SSH_SERVER_VERSION,
   type SavedSshServer,
+  type SshAuthenticationPreference,
   type SshServerStoreDocument,
 } from "./types.ts";
 
@@ -20,6 +21,7 @@ export class UnsupportedStoreVersionError extends Error {
 
 const SHELLS = new Set<SshShellPreference>(["auto", "bash", "zsh", "sh", "pwsh", "powershell"]);
 const TRANSPORTS = new Set<SshTransportPreference>(["auto", "openssh", "ssh2"]);
+const AUTHENTICATIONS = new Set<SshAuthenticationPreference>(["auto", "password", "key"]);
 
 function record(value: unknown): Record<string, unknown> | undefined {
   return value && typeof value === "object" && !Array.isArray(value)
@@ -49,8 +51,16 @@ function normalizeServer(value: unknown): SavedSshServer {
   }
   const shellPreference = input.shellPreference;
   const transportPreference = input.transportPreference;
+  const authenticationPreference = input.authenticationPreference ?? "auto";
   if (!SHELLS.has(shellPreference as SshShellPreference)) throw new Error("Invalid SSH server shell preference");
   if (!TRANSPORTS.has(transportPreference as SshTransportPreference)) throw new Error("Invalid SSH server transport preference");
+  if (!AUTHENTICATIONS.has(authenticationPreference as SshAuthenticationPreference)) throw new Error("Invalid SSH server authentication preference");
+  const identityFile = authenticationPreference === "key"
+    ? safeString(input.identityFile, "identity file")
+    : undefined;
+  if (identityFile && !isAbsolute(identityFile) && !win32.isAbsolute(identityFile)) {
+    throw new Error("SSH server identity file must be absolute");
+  }
   return {
     version: SSH_SERVER_VERSION,
     id,
@@ -59,6 +69,8 @@ function normalizeServer(value: unknown): SavedSshServer {
     target,
     port,
     configFile: safeString(input.configFile, "config file", true),
+    authenticationPreference: authenticationPreference as SshAuthenticationPreference,
+    identityFile,
     shellPreference: shellPreference as SshShellPreference,
     transportPreference: transportPreference as SshTransportPreference,
     createdAt: safeString(input.createdAt, "created timestamp")!,

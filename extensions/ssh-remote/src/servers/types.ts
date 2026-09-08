@@ -4,6 +4,8 @@ import type { SshTransportPreference } from "../transport/client.ts";
 export const SSH_SERVER_STORE_VERSION = 1 as const;
 export const SSH_SERVER_VERSION = 1 as const;
 
+export type SshAuthenticationPreference = "auto" | "password" | "key";
+
 export interface SavedSshServer {
   version: typeof SSH_SERVER_VERSION;
   id: string;
@@ -12,6 +14,8 @@ export interface SavedSshServer {
   target: string;
   port?: number;
   configFile?: string;
+  authenticationPreference: SshAuthenticationPreference;
+  identityFile?: string;
   shellPreference: SshShellPreference;
   transportPreference: SshTransportPreference;
   createdAt: string;
