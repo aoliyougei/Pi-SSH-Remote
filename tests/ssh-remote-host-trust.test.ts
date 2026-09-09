@@ -7,6 +7,7 @@ import { join } from "node:path";
 import test from "node:test";
 import {
   ChangedSshHostKeyError,
+  SshHostTrustController,
   UnknownSshHostKeyError,
   getPersistentKnownHostsPath,
   parseSshHostKeyBlob,
@@ -119,6 +120,58 @@ test("Ssh2Client preserves typed unknown host-key errors", async () => {
   });
   await assert.rejects(client.run("true"), UnknownSshHostKeyError);
   await client.dispose();
+});
+
+test("host trust controller confirms in Chinese, persists, and retries", async () => {
+  const root = mkdtempSync(join(tmpdir(), "ssh-host-controller-"));
+  const path = join(root, "known_hosts");
+  const candidate = parseSshHostKeyBlob(hostKeyBlob(), { host: "server.example.test", port: 22, role: "target" });
+  const confirmations: Array<{ title: string; message: string }> = [];
+  let attempts = 0;
+  try {
+    const controller = new SshHostTrustController({ path });
+    const result = await controller.connectWithTrust({ hasUI: true, ui: { confirm: async (title: string, message: string) => { confirmations.push({ title, message }); return true; }, notify: () => {} } } as any, async () => {
+      if (attempts++ === 0) throw new UnknownSshHostKeyError(candidate);
+      return "connected";
+    });
+    assert.equal(result, "connected");
+    assert.equal(attempts, 2);
+    assert.equal(confirmations.length, 1);
+    assert.match(confirmations[0].title, /确认 SSH 主机指纹/);
+    assert.match(confirmations[0].message, /SHA-256 指纹/);
+    assert.match(readFileSync(path, "utf8"), /server\.example\.test ssh-ed25519/);
+  } finally { rmSync(root, { recursive: true, force: true }); }
+});
+
+test("host trust controller rejects cancelled, headless, and repeated unknown keys", async () => {
+  const root = mkdtempSync(join(tmpdir(), "ssh-host-controller-reject-"));
+  const path = join(root, "known_hosts");
+  const candidate = parseSshHostKeyBlob(hostKeyBlob(), { host: "server.example.test", port: 22, role: "target" });
+  try {
+    const controller = new SshHostTrustController({ path });
+    await assert.rejects(controller.connectWithTrust({ hasUI: true, ui: { confirm: async () => false, notify: () => {} } } as any, async () => { throw new UnknownSshHostKeyError(candidate); }), /未信任/);
+    assert.equal(existsSync(path), false);
+    await assert.rejects(controller.connectWithTrust({ hasUI: false } as any, async () => { throw new UnknownSshHostKeyError(candidate); }), /交互式界面/);
+    await assert.rejects(controller.connectWithTrust({ hasUI: true, ui: { confirm: async () => true, notify: () => {} } } as any, async () => { throw new UnknownSshHostKeyError(candidate); }), /重复/);
+  } finally { rmSync(root, { recursive: true, force: true }); }
+});
+
+test("host trust controller deduplicates concurrent confirmation", async () => {
+  const root = mkdtempSync(join(tmpdir(), "ssh-host-controller-concurrent-"));
+  const path = join(root, "known_hosts");
+  const candidate = parseSshHostKeyBlob(hostKeyBlob(), { host: "server.example.test", port: 22, role: "target" });
+  let prompts = 0;
+  let trusted = false;
+  const ctx = { hasUI: true, ui: { confirm: async () => { prompts++; await new Promise((resolve) => setTimeout(resolve, 10)); trusted = true; return true; }, notify: () => {} } } as any;
+  const attempt = async () => {
+    if (!trusted) throw new UnknownSshHostKeyError(candidate);
+    return "ok";
+  };
+  try {
+    const controller = new SshHostTrustController({ path });
+    assert.deepEqual(await Promise.all([controller.connectWithTrust(ctx, attempt), controller.connectWithTrust(ctx, attempt)]), ["ok", "ok"]);
+    assert.equal(prompts, 1);
+  } finally { rmSync(root, { recursive: true, force: true }); }
 });
 
 test("trust store rejects a symlinked parent directory", () => {
