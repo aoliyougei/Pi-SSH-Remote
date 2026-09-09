@@ -28,6 +28,7 @@ import type {
   AutocompleteProvider,
   AutocompleteProviderFactory,
 } from "@earendil-works/pi-tui";
+import { UnknownSshHostKeyError, parseSshHostKeyBlob } from "../extensions/ssh-remote/src/host-trust/index.ts";
 import {
   selectRemoteAdapter,
   UnixBashAdapter,
@@ -4650,6 +4651,7 @@ interface HarnessOptions {
     placeholder?: string,
     options?: { timeout?: number; signal?: AbortSignal },
   ) => Promise<string | undefined>;
+  confirm?: (title: string, message: string) => Promise<boolean>;
 }
 
 function createExtensionHarness(options: HarnessOptions = {}) {
@@ -4779,6 +4781,7 @@ function createExtensionHarness(options: HarnessOptions = {}) {
         inputCalls.push({ title, placeholder, options: inputOptions });
         return options.input?.(title, placeholder, inputOptions);
       },
+      confirm: async (title: string, message: string) => options.confirm?.(title, message) ?? false,
     },
   } as unknown as ExtensionContext;
 
@@ -5185,6 +5188,32 @@ test("persistent SSH disconnect events update the footer without polling", async
     /SSH 连接已断开：.*connection closed/i.test(notification.message)
   ));
   await harness.emit("session_shutdown", { reason: "quit" });
+});
+
+test("ssh-connect confirms and persists an unknown host fingerprint before retrying", async () => {
+  const root = mkdtempSync(join(tmpdir(), "ssh-extension-host-trust-"));
+  const path = join(root, "known_hosts");
+  const candidate = parseSshHostKeyBlob(fakeHostKeyBlob("extension-host"), { host: "devbox", port: 22, role: "target" });
+  const prompts: string[] = [];
+  const harness = createExtensionHarness({ confirm: async (title, message) => { prompts.push(`${title}\n${message}`); return true; } });
+  const client = new FakeSshClient({ target: "devbox" });
+  let attempts = 0;
+  try {
+    createSshRemoteExtension({
+      knownHostsPath: path,
+      createClient: () => client,
+      selectRemote: async () => {
+        if (attempts++ === 0) throw new UnknownSshHostKeyError(candidate);
+        return { adapter: new UnixBashAdapter(client), workspace: { platform: "unix", shell: "bash", home: "/home/deploy", cwd: "/home/deploy" } };
+      },
+    })(harness.pi);
+    await harness.commands.get("ssh-connect").handler("devbox", harness.ctx);
+    assert.equal(attempts, 2);
+    assert.equal(prompts.length, 1);
+    assert.match(prompts[0], /确认 SSH 主机指纹.*SHA-256 指纹/s);
+    assert.match(readFileSync(path, "utf8"), /devbox ssh-ed25519/);
+    assert.equal(harness.statuses.get("ssh-remote"), "SSH： 已连接");
+  } finally { rmSync(root, { recursive: true, force: true }); }
 });
 
 test("local sessions can connect and explicitly exit without resuming the old SSH target", async () => {

@@ -191,6 +191,13 @@ export function buildSshArguments(
 
   const args: string[] = [];
   if (options.configFile) args.push("-F", options.configFile);
+  if (options.knownHostsFile) {
+    args.push(
+      "-o", `UserKnownHostsFile=${options.knownHostsFile}`,
+      "-o", "GlobalKnownHostsFile=/etc/ssh/ssh_known_hosts",
+      "-o", "StrictHostKeyChecking=yes",
+    );
+  }
   if (options.authenticationPreference === "key") {
     if (!options.identityFile || (!isAbsolute(options.identityFile) && !win32.isAbsolute(options.identityFile))) {
       throw new Error("SSH key authentication requires an absolute identity file");

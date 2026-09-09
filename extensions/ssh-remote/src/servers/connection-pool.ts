@@ -1,5 +1,6 @@
 import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
 import { selectRemoteAdapter, type RemoteAdapter, type RemoteWorkspace } from "../adapters/index.ts";
+import type { SshHostTrustController } from "../host-trust/controller.ts";
 import { createSshTransportClient, openSshPasswordEndpoint, type SshPasswordProvider } from "../transport/index.ts";
 import { parseOpenSshConfig, runLocalCommand } from "../transport/ssh2-config.ts";
 import type { SshRemoteClient } from "../transport/client.ts";
@@ -33,6 +34,9 @@ export interface ServerConnectionPoolOptions {
   selectRemote?: typeof selectRemoteAdapter;
   setTimeoutFn?: typeof setTimeout;
   clearTimeoutFn?: typeof clearTimeout;
+  knownHostsFile?: string;
+  hostTrust?: SshHostTrustController;
+  preflight?: (server: SavedSshServer, ctx: ExtensionContext, signal: AbortSignal | undefined, passwordProvider: SshPasswordProvider) => Promise<void>;
 }
 
 export class ServerConnectionPool {
@@ -44,6 +48,9 @@ export class ServerConnectionPool {
   private readonly selectRemote: typeof selectRemoteAdapter;
   private readonly setTimeoutFn: typeof setTimeout;
   private readonly clearTimeoutFn: typeof clearTimeout;
+  private readonly knownHostsFile?: string;
+  private readonly hostTrust?: SshHostTrustController;
+  private readonly preflight?: ServerConnectionPoolOptions["preflight"];
   private readonly entries = new Map<string, PoolEntry>();
   private readonly connecting = new Map<string, Promise<PoolEntry>>();
   private closed = false;
@@ -57,6 +64,9 @@ export class ServerConnectionPool {
     this.selectRemote = options.selectRemote ?? selectRemoteAdapter;
     this.setTimeoutFn = options.setTimeoutFn ?? setTimeout;
     this.clearTimeoutFn = options.clearTimeoutFn ?? clearTimeout;
+    this.knownHostsFile = options.knownHostsFile;
+    this.hostTrust = options.hostTrust;
+    this.preflight = options.preflight;
   }
 
   private key(server: SavedSshServer): string { return `${server.id}\0${server.updatedAt}`; }
@@ -103,8 +113,10 @@ export class ServerConnectionPool {
     };
   }
 
-  private async connect(server: SavedSshServer, ctx: ExtensionContext, signal?: AbortSignal): Promise<PoolEntry> {
+  private async connectOnce(server: SavedSshServer, ctx: ExtensionContext, signal?: AbortSignal): Promise<PoolEntry> {
     signal?.throwIfAborted();
+    const passwordProvider = this.passwordProvider(ctx);
+    await this.preflight?.(server, ctx, signal, passwordProvider);
     const key = this.key(server);
     const client = this.createClient({
       target: server.target,
@@ -112,13 +124,14 @@ export class ServerConnectionPool {
       configFile: server.configFile,
       authenticationPreference: server.authenticationPreference,
       identityFile: server.identityFile,
+      knownHostsFile: this.knownHostsFile,
       executable: this.platform === "win32" ? "ssh.exe" : undefined,
       connectTimeoutSeconds: 10,
       batchMode: true,
     }, {
       platform: this.platform,
       preference: server.transportPreference,
-      passwordProvider: this.passwordProvider(ctx),
+      passwordProvider,
     });
     try {
       const selected = await this.selectRemote(client, {
@@ -143,6 +156,11 @@ export class ServerConnectionPool {
       await client.dispose();
       throw error;
     }
+  }
+
+  private connect(server: SavedSshServer, ctx: ExtensionContext, signal?: AbortSignal): Promise<PoolEntry> {
+    const attempt = () => this.connectOnce(server, ctx, signal);
+    return this.hostTrust ? this.hostTrust.connectWithTrust(ctx, attempt) : attempt();
   }
 
   async acquire(server: SavedSshServer, ctx: ExtensionContext, signal?: AbortSignal): Promise<ServerConnectionLease> {

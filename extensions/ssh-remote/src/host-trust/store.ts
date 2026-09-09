@@ -66,7 +66,7 @@ export function trustHostKey(candidate: SshHostKeyCandidate, path = getPersisten
     throw new ChangedSshHostKeyError(candidate);
   }
 
-  const next = `${current.replace(/\s*$/, "")}${current.trim() ? "\n" : ""}${exact}\n`;
+  const next = `${current}${current && !current.endsWith("\n") ? "\n" : ""}${exact}\n`;
   const temporary = `${path}.${process.pid}.${randomUUID()}.tmp`;
   let descriptor: number | undefined;
   try {

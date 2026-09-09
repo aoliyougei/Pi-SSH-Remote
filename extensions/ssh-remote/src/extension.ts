@@ -18,6 +18,7 @@ import {
 import { Box, Container, Spacer, Text } from "@earendil-works/pi-tui";
 import { Type } from "typebox";
 import { dirname, isAbsolute, relative, resolve, sep } from "node:path";
+import { getPersistentKnownHostsPath, SshHostTrustController } from "./host-trust/index.ts";
 import {
   classifySshTransportFailure,
   selectRemoteAdapter,
@@ -209,6 +210,10 @@ export interface SshRemoteExtensionDependencies {
   secretsPath?: string;
   /** Override the AI password-prompt timeout (tests). */
   aiPasswordPromptTimeoutMs?: number;
+  /** Override persistent host trust paths/controllers (tests). */
+  knownHostsPath?: string;
+  hostTrust?: SshHostTrustController;
+  hostKeyPreflight?: (options: SshClientOptions, passwordProvider: SshPasswordProvider | undefined, signal?: AbortSignal) => Promise<void>;
 }
 
 function defaultLoadPreviousSessionState(
@@ -592,6 +597,17 @@ export function createSshRemoteExtension(
       persistPasswords: config.persistPasswords,
       secretsPath: dependencies.secretsPath,
     });
+    const knownHostsPath = dependencies.knownHostsPath ?? getPersistentKnownHostsPath();
+    const hostTrust = dependencies.hostTrust ?? new SshHostTrustController({ path: knownHostsPath });
+    const hostKeyPreflight = dependencies.hostKeyPreflight ?? (
+      dependencies.createClient || dependencies.createTransportClient
+        ? undefined
+        : async (options: SshClientOptions, passwordProvider: SshPasswordProvider | undefined, signal?: AbortSignal) => {
+            const client = createSshTransportClient(options, { platform, preference: "ssh2", passwordProvider });
+            try { await client.run("exit 0", { signal, timeoutSeconds: CONNECT_TIMEOUT_SECONDS }); }
+            finally { await client.dispose(); }
+          }
+    );
     const aiPasswordPromptTimeoutMs =
       dependencies.aiPasswordPromptTimeoutMs ?? AI_SSH_PASSWORD_PROMPT_TIMEOUT_MS;
     if (
@@ -666,6 +682,24 @@ export function createSshRemoteExtension(
       passwordEnabled: () => config.passwordPrompt,
       createClient: dependencies.createTransportClient,
       selectRemote,
+      knownHostsFile: knownHostsPath,
+      hostTrust,
+      preflight: hostKeyPreflight
+        ? async (server, _ctx, signal, passwordProvider) => {
+            if (server.transportPreference === "ssh2" || (server.transportPreference === "auto" && platform === "win32")) return;
+            await hostKeyPreflight({
+              target: server.target,
+              port: server.port,
+              configFile: server.configFile,
+              authenticationPreference: server.authenticationPreference,
+              identityFile: server.identityFile,
+              knownHostsFile: knownHostsPath,
+              executable: platform === "win32" ? "ssh.exe" : undefined,
+              connectTimeoutSeconds: CONNECT_TIMEOUT_SECONDS,
+              batchMode: true,
+            }, passwordProvider, signal);
+          }
+        : undefined,
     });
     const localMirrors = new LocalMirrorController({
       servers: serverController,
@@ -1034,6 +1068,7 @@ export function createSshRemoteExtension(
           target: intent.target,
           port: intent.port,
           configFile: intent.configFile,
+          knownHostsFile: knownHostsPath,
           executable: platform === "win32" ? "ssh.exe" : undefined,
           connectTimeoutSeconds: CONNECT_TIMEOUT_SECONDS,
           batchMode: true,
@@ -1078,25 +1113,34 @@ export function createSshRemoteExtension(
             }
           : undefined;
         const shellPreference = intent.shellPreference;
-        const createdClient = dependencies.createClient
-          ? dependencies.createClient(clientOptions)
-          : (dependencies.createTransportClient ?? createSshTransportClient)(
-              clientOptions,
-              {
-                platform,
-                preference: transport,
-                passwordProvider,
-              },
-            );
-        client = createdClient;
         const requestedCwd = intent.storedState?.remoteCwd ?? intent.requestedCwd;
-        const selected = await selectRemote(client, {
-          localPlatform: platform,
-          preference: shellPreference,
-          expectedPlatform: intent.storedState?.remotePlatform,
-          expectedShell: intent.storedState?.remoteShell,
-          requestedCwd,
+        const connected = await hostTrust.connectWithTrust(ctx, async () => {
+          let attemptClient: SshRemoteClient | undefined;
+          try {
+            if (hostKeyPreflight && (transport === "openssh" || (transport === "auto" && platform !== "win32"))) {
+              await hostKeyPreflight(clientOptions, passwordProvider, signal);
+            }
+            attemptClient = dependencies.createClient
+              ? dependencies.createClient(clientOptions)
+              : (dependencies.createTransportClient ?? createSshTransportClient)(
+                  clientOptions,
+                  { platform, preference: transport, passwordProvider },
+                );
+            const selected = await selectRemote(attemptClient, {
+              localPlatform: platform,
+              preference: shellPreference,
+              expectedPlatform: intent.storedState?.remotePlatform,
+              expectedShell: intent.storedState?.remoteShell,
+              requestedCwd,
+            });
+            return { createdClient: attemptClient, selected };
+          } catch (error) {
+            await Promise.resolve(attemptClient?.dispose()).catch(() => {});
+            throw error;
+          }
         });
+        const { createdClient, selected } = connected;
+        client = createdClient;
         const onTransportFailure = (error: Error): void => {
           if (!observeClientFailures) return;
           const current = runtime;

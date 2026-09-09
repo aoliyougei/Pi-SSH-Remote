@@ -7,6 +7,7 @@ import test from "node:test";
 import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
 import { registerSshManagementCommands } from "../extensions/ssh-remote/src/servers/commands.ts";
 import { ServerConnectionPool } from "../extensions/ssh-remote/src/servers/connection-pool.ts";
+import { SshHostTrustController, UnknownSshHostKeyError, parseSshHostKeyBlob } from "../extensions/ssh-remote/src/host-trust/index.ts";
 import { getDefaultOpenSshConfigPath } from "../extensions/ssh-remote/src/servers/managed-key.ts";
 import { loadServerStore, normalizeServerStore, saveServerStore, UnsupportedStoreVersionError } from "../extensions/ssh-remote/src/servers/store.ts";
 import { ServerController } from "../extensions/ssh-remote/src/servers/controller.ts";
@@ -35,6 +36,14 @@ test("server store normalizes legacy authentication and validates key identity",
   assert.throws(() => normalizeServerStore({ version: 1, servers: [{
     ...fixtureServer(), authenticationPreference: "key",
   }] }), /identity/i);
+});
+
+test("OpenSSH arguments enforce the persistent known_hosts file", () => {
+  const args = buildSshArguments({ target: "deploy@devbox", knownHostsFile: "/local/pi-agent/ssh/known_hosts" });
+  assert.ok(args.includes("UserKnownHostsFile=/local/pi-agent/ssh/known_hosts"));
+  assert.ok(args.includes("GlobalKnownHostsFile=/etc/ssh/ssh_known_hosts"));
+  assert.ok(args.includes("StrictHostKeyChecking=yes"));
+  assert.equal(args.some((value) => /StrictHostKeyChecking=(?:no|accept-new)/.test(value)), false);
 });
 
 test("OpenSSH arguments honor explicit authentication preference", () => {
@@ -191,6 +200,28 @@ test("/ssh add rolls back a staged managed key when connection testing fails", a
     } });
     assert.equal(existsSync(join(root, "managed_key")), false);
   } finally { rmSync(root, { recursive: true, force: true }); }
+});
+
+test("server pool confirms an unknown preflight key and retries", async () => {
+  const root = mkdtempSync(join(tmpdir(), "ssh-pool-host-trust-"));
+  const keyPart = (value: string) => { const data = Buffer.from(value); const size = Buffer.alloc(4); size.writeUInt32BE(data.length); return Buffer.concat([size, data]); };
+  const candidate = parseSshHostKeyBlob(Buffer.concat([keyPart("ssh-ed25519"), keyPart("pool-test-key")]), { host: "devbox", port: 22, role: "target" });
+  let preflights = 0;
+  let confirmations = 0;
+  const interactive = { hasUI: true, ui: { confirm: async () => { confirmations++; return true; }, notify: () => {}, input: async () => undefined } } as unknown as ExtensionContext;
+  const pool = new ServerConnectionPool({
+    passwordResolver: new SshPasswordResolver({ persistPasswords: false, secretsPath: join(root, "secrets.json") }),
+    hostTrust: new SshHostTrustController({ path: join(root, "known_hosts") }),
+    preflight: async () => { if (preflights++ === 0) throw new UnknownSshHostKeyError(candidate); },
+    createClient: ((options: any) => ({ options, dispose: async () => {} })) as any,
+    selectRemote: async () => ({ adapter: {} as any, workspace: { platform: "unix", shell: "bash", home: "/home/deploy", cwd: "/home/deploy" } }),
+  });
+  try {
+    const lease = await pool.acquire(fixtureServer(), interactive);
+    assert.equal(preflights, 2);
+    assert.equal(confirmations, 1);
+    await lease.release();
+  } finally { await pool.shutdown(); rmSync(root, { recursive: true, force: true }); }
 });
 
 test("server pool connection failure remains isolated", async () => {
