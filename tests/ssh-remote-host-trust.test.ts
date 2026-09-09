@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { EventEmitter } from "node:events";
 import { createHash } from "node:crypto";
 import { existsSync, lstatSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -6,10 +7,13 @@ import { join } from "node:path";
 import test from "node:test";
 import {
   ChangedSshHostKeyError,
+  UnknownSshHostKeyError,
   getPersistentKnownHostsPath,
   parseSshHostKeyBlob,
   trustHostKey,
 } from "../extensions/ssh-remote/src/host-trust/index.ts";
+import { resolveSsh2Connection } from "../extensions/ssh-remote/src/transport/ssh2-config.ts";
+import { Ssh2Client } from "../extensions/ssh-remote/src/transport/ssh2-client.ts";
 
 function sshString(value: Buffer): Buffer {
   const length = Buffer.alloc(4);
@@ -72,6 +76,49 @@ test("trust store rejects changed keys, symlinks, and oversized files", () => {
     writeFileSync(path, Buffer.alloc(16 * 1024 * 1024 + 1));
     assert.throws(() => trustHostKey(first, path), /16 MiB/);
   } finally { rmSync(root, { recursive: true, force: true }); }
+});
+
+test("ssh2 resolver captures unknown, changed, and revoked host keys", async () => {
+  const root = mkdtempSync(join(tmpdir(), "ssh-host-verifier-"));
+  const path = join(root, "known_hosts");
+  writeFileSync(path, "");
+  const key = hostKeyBlob();
+  const other = hostKeyBlob("ssh-ed25519", "other-key");
+  const resolve = async (knownOutput: string) => resolveSsh2Connection(
+    { target: "alias", knownHostsFile: path },
+    { platform: "linux", home: root, env: {}, allowPasswordPrompt: true, runLocal: async (_executable, args) => args.includes("-G") ? {
+      stdout: Buffer.from("user deploy\nhostname server.example.test\nport 22\nhostkeyalias stable-name\npubkeyauthentication true\nidentitiesonly no\n"), stderr: Buffer.alloc(0), exitCode: 0,
+    } : { stdout: Buffer.from(knownOutput), stderr: Buffer.alloc(0), exitCode: knownOutput ? 0 : 1 } },
+  );
+  try {
+    const unknown = await resolve("");
+    assert.equal((unknown.config.hostVerifier as (value: Buffer) => boolean)(key), false);
+    assert.equal(unknown.verification.kind, "unknown");
+    assert.equal(unknown.verification.candidate?.lookupHost, "stable-name");
+
+    const changed = await resolve(`stable-name ssh-ed25519 ${other.toString("base64")}\n`);
+    assert.equal((changed.config.hostVerifier as (value: Buffer) => boolean)(key), false);
+    assert.equal(changed.verification.kind, "changed");
+
+    const revoked = await resolve(`@revoked stable-name ssh-ed25519 ${key.toString("base64")}\n`);
+    assert.equal((revoked.config.hostVerifier as (value: Buffer) => boolean)(key), false);
+    assert.equal(revoked.verification.kind, "revoked");
+  } finally { rmSync(root, { recursive: true, force: true }); }
+});
+
+test("Ssh2Client preserves typed unknown host-key errors", async () => {
+  const candidate = parseSshHostKeyBlob(hostKeyBlob(), { host: "server.example.test", port: 22, role: "target" });
+  const verification = { kind: "unknown" as const, candidate, rejection: "unknown" };
+  class RejectingClient extends EventEmitter {
+    connect(): void { queueMicrotask(() => this.emit("error", Object.assign(new Error("handshake failed"), { level: "handshake" }))); }
+    destroy(): void {}
+  }
+  const client = new Ssh2Client({ target: "server.example.test" }, {
+    createClient: () => new RejectingClient() as any,
+    resolveConnection: async () => ({ config: { host: candidate.host, username: "deploy" }, hostLabel: "deploy@server.example.test:22", warnings: [], verification }),
+  });
+  await assert.rejects(client.run("true"), UnknownSshHostKeyError);
+  await client.dispose();
 });
 
 test("trust store rejects a symlinked parent directory", () => {

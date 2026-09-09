@@ -13,6 +13,8 @@ import ssh2, {
   type MacAlgorithm,
   type ServerHostKeyAlgorithm,
 } from "ssh2";
+import { parseSshHostKeyBlob } from "../host-trust/store.ts";
+import type { SshHostKeyCandidate } from "../host-trust/types.ts";
 import { parseSshPort, type SshClientOptions } from "./client.ts";
 import type { SshPasswordEndpoint } from "./password-resolver.ts";
 
@@ -118,7 +120,11 @@ export interface ResolvedSsh2Endpoint {
   config: ConnectConfig;
   hostLabel: string;
   warnings: string[];
-  verification: { rejection?: string };
+  verification: {
+    rejection?: string;
+    candidate?: SshHostKeyCandidate;
+    kind?: "unknown" | "changed" | "revoked";
+  };
 }
 
 export interface ResolvedSsh2Connection extends ResolvedSsh2Endpoint {
@@ -477,6 +483,13 @@ export function parseKnownHostSearchOutput(text: string): KnownHostKeys {
   return result;
 }
 
+function contextKnownHostsFiles(config: ParsedOpenSshConfig): string[] {
+  return [
+    ...(config.get("userknownhostsfile") ?? []),
+    ...(config.get("globalknownhostsfile") ?? []),
+  ];
+}
+
 async function loadKnownHostKeys(
   config: ParsedOpenSshConfig,
   executable: string,
@@ -484,11 +497,9 @@ async function loadKnownHostKeys(
   home: string,
   lookupHost: string,
   runLocal: LocalCommandRunner,
+  pathsOverride?: readonly string[],
 ): Promise<KnownHostKeys> {
-  const configuredPaths = [
-    ...(config.get("userknownhostsfile") ?? []),
-    ...(config.get("globalknownhostsfile") ?? []),
-  ];
+  const configuredPaths = pathsOverride ? [...pathsOverride] : contextKnownHostsFiles(config);
   const paths = await existingConfigPaths(configuredPaths, home);
   const combined: KnownHostKeys = {
     accepted: new Set(),
@@ -753,14 +764,14 @@ async function resolveSsh2Endpoint(
     context.home,
     lookupHost,
     context.runLocal,
+    context.options.knownHostsFile
+      ? [context.options.knownHostsFile, "/etc/ssh/ssh_known_hosts"]
+      : undefined,
   );
-  if (knownHostKeys.accepted.size === 0) {
-    const authority = knownHostKeys.hasCertificateAuthority
-      ? " The host is trusted only through @cert-authority, which ssh2 mode does not support."
-      : " Run the system OpenSSH client once to trust the host key first.";
+  if (knownHostKeys.accepted.size === 0 && knownHostKeys.hasCertificateAuthority) {
     throw new Ssh2CompatibilityError(
-      `No directly trusted host key for ${lookupHost} was found in OpenSSH known_hosts.${authority}`,
-      knownHostKeys.hasCertificateAuthority ? ["@cert-authority"] : ["unknown host key enrollment"],
+      `Host ${lookupHost} is trusted only through @cert-authority, which ssh2 mode does not support`,
+      ["@cert-authority"],
     );
   }
 
@@ -777,7 +788,7 @@ async function resolveSsh2Endpoint(
     password,
     context.allowPasswordPrompt,
   );
-  const verification: { rejection?: string } = {};
+  const verification: ResolvedSsh2Endpoint["verification"] = {};
   const addressFamily = first(openSsh, "addressfamily");
   const localAddress = first(openSsh, "bindaddress");
   const config: ConnectConfig = {
@@ -796,15 +807,28 @@ async function resolveSsh2Endpoint(
     forceIPv6: addressFamily === "inet6",
     localAddress: localAddress && localAddress !== "*" ? localAddress : undefined,
     hostVerifier: (key: Buffer) => {
-      const encoded = key.toString("base64");
+      const candidate = parseSshHostKeyBlob(key, {
+        host,
+        port,
+        hostKeyAlias: hostKeyName !== host ? hostKeyName : undefined,
+        role: request.role,
+      });
+      const encoded = candidate.keyBase64;
+      verification.candidate = candidate;
       if (knownHostKeys.revoked.has(encoded)) {
+        verification.kind = "revoked";
         verification.rejection = `The host key for ${lookupHost} is marked @revoked`;
         return false;
       }
       if (!knownHostKeys.accepted.has(encoded)) {
-        verification.rejection = `The host key presented by ${lookupHost} does not match OpenSSH known_hosts`;
+        verification.kind = knownHostKeys.accepted.size > 0 ? "changed" : "unknown";
+        verification.rejection = verification.kind === "changed"
+          ? `The host key presented by ${lookupHost} does not match OpenSSH known_hosts`
+          : `The host key for ${lookupHost} is unknown`;
         return false;
       }
+      verification.kind = undefined;
+      verification.rejection = undefined;
       return true;
     },
   };

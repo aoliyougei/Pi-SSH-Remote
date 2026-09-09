@@ -2,6 +2,7 @@ import ssh2, {
   type Client as RawSsh2Client,
   type ClientChannel,
 } from "ssh2";
+import { ChangedSshHostKeyError, UnknownSshHostKeyError } from "../host-trust/types.ts";
 import {
   type SshClientOptions,
   type SshDisconnectListener,
@@ -185,8 +186,16 @@ export class Ssh2Client implements SshRemoteClient {
         try {
           client.destroy();
         } catch {}
-        const verification = endpoint.verification.rejection;
-        const detail = verification ?? errorText(error);
+        const verification = endpoint.verification;
+        if (verification.kind === "unknown" && verification.candidate) {
+          reject(new UnknownSshHostKeyError(verification.candidate));
+          return;
+        }
+        if ((verification.kind === "changed" || verification.kind === "revoked") && verification.candidate) {
+          reject(new ChangedSshHostKeyError(verification.candidate, verification.rejection));
+          return;
+        }
+        const detail = verification.rejection ?? errorText(error);
         reject(new Ssh2ConnectionError(`ssh2 connection to ${endpoint.hostLabel} failed: ${detail}`, {
           cause: error,
         }));

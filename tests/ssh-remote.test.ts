@@ -119,6 +119,16 @@ import {
   shellQuote,
 } from "../extensions/ssh-remote/src/workspace/target.ts";
 
+function fakeHostKeyBlob(marker = "test-host-key"): Buffer {
+  const field = (value: string): Buffer => {
+    const content = Buffer.from(value);
+    const length = Buffer.alloc(4);
+    length.writeUInt32BE(content.length);
+    return Buffer.concat([length, content]);
+  };
+  return Buffer.concat([field("ssh-ed25519"), field(marker)]);
+}
+
 function createSshRemoteExtension(
   dependencies: Parameters<typeof createSshRemoteExtensionBase>[0] = {},
 ): ReturnType<typeof createSshRemoteExtensionBase> {
@@ -813,7 +823,7 @@ test("ssh2 config uses ssh -G, OpenSSH known_hosts, agent auth, and algorithm in
   const directory = mkdtempSync(join(tmpdir(), "pi-ssh2-config-test-"));
   const knownHosts = join(directory, "known_hosts");
   writeFileSync(knownHosts, "placeholder\n");
-  const hostKey = Buffer.from("test-host-key-blob");
+  const hostKey = fakeHostKeyBlob();
   const encodedHostKey = hostKey.toString("base64");
   const calls: Array<{ executable: string; args: readonly string[] }> = [];
   try {
@@ -868,7 +878,7 @@ test("ssh2 config uses ssh -G, OpenSSH known_hosts, agent auth, and algorithm in
     assert.ok(Array.isArray(resolved.config.authHandler));
     const verify = resolved.config.hostVerifier as (key: Buffer) => boolean;
     assert.equal(verify(hostKey), true);
-    assert.equal(verify(Buffer.from("different-host-key")), false);
+    assert.equal(verify(fakeHostKeyBlob("different-host-key")), false);
     assert.match(resolved.verification.rejection ?? "", /does not match/);
     assert.equal(calls.length, 2);
     assert.ok(calls[0].args.includes("-G"));
@@ -885,7 +895,7 @@ test("ssh2 authentication preference orders password and explicit identity first
   const pair = generateKeyPairSync("rsa", { modulusLength: 2048 });
   writeFileSync(identityFile, pair.privateKey.export({ format: "pem", type: "pkcs1" }));
   writeFileSync(knownHosts, "placeholder\n");
-  const hostKey = Buffer.from("test-host-key-blob");
+  const hostKey = fakeHostKeyBlob();
   const runLocal = async (_executable: string, args: readonly string[]) => args.includes("-G") ? {
     stdout: Buffer.from(["user deploy", "hostname server.example.test", "port 22", "identityagent SSH_AUTH_SOCK", `userknownhostsfile ${knownHosts}`, "globalknownhostsfile none", "pubkeyauthentication true", "identitiesonly no"].join("\n") + "\n"), stderr: Buffer.alloc(0), exitCode: 0,
   } : { stdout: Buffer.from(`server.example.test ssh-rsa ${hostKey.toString("base64")}\n`), stderr: Buffer.alloc(0), exitCode: 0 };
@@ -901,7 +911,7 @@ test("ssh2 applies an explicit target port to ssh -G and known_hosts lookups", a
   const directory = mkdtempSync(join(tmpdir(), "pi-ssh2-port-config-test-"));
   const knownHosts = join(directory, "known_hosts");
   writeFileSync(knownHosts, "placeholder\n");
-  const hostKey = Buffer.from("test-host-key-blob");
+  const hostKey = fakeHostKeyBlob();
   const encodedHostKey = hostKey.toString("base64");
   const calls: Array<{ executable: string; args: readonly string[] }> = [];
   try {

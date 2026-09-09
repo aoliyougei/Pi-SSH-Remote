@@ -29,6 +29,8 @@ export interface SshClientOptions {
   configFile?: string;
   authenticationPreference?: SshAuthenticationPreference;
   identityFile?: string;
+  /** Persistent Pi-managed trust store used by both OpenSSH and ssh2. */
+  knownHostsFile?: string;
   executable?: string;
   connectTimeoutSeconds?: number;
   batchMode?: boolean;
