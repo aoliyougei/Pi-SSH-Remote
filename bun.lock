@@ -22,7 +22,7 @@
     },
     "extensions/ssh-remote": {
       "name": "@aoliyougei/pi-ssh-remote",
-      "version": "0.7.0",
+      "version": "0.8.0",
       "dependencies": {
         "@aoliyougei/pi-shared-settings": "0.1.4",
         "@aoliyougei/pi-workspace-files": "0.1.2",
