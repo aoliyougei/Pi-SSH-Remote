@@ -428,7 +428,7 @@ each foreground operation. It runs `ssh -G` locally to resolve:
 - host, user, port, identities, and agent location;
 - keepalives and effective algorithm lists;
 - `ProxyJump` endpoints;
-- configured `known_hosts` files.
+- the persistent Pi `known_hosts` file and system host keys.
 
 An explicit target port is resolved with `ssh -G -p <port>`, so it overrides
 the configured `Port` and is used for known_hosts lookups and password cache
@@ -474,12 +474,47 @@ through the TUI.
 
 ### Host verification
 
-- OpenSSH uses the system client's normal host-key policy.
-- `ssh2` verifies every destination and jump host against direct entries in the
-  configured OpenSSH `known_hosts` files.
-- `ssh2` refuses unknown or changed keys and does not enroll trust
-  automatically. Connect once with the system OpenSSH client to review and
-  accept a new key before starting Pi.
+SSH Remote uses one persistent trust store for OpenSSH and `ssh2`:
+
+```text
+<PI_CODING_AGENT_DIR>/ssh/known_hosts
+```
+
+The first connection to an unknown destination shows a Chinese confirmation
+with the host, key type, and SHA-256 fingerprint. Verify that fingerprint
+through a trusted channel before accepting it. Acceptance appends an OpenSSH
+record atomically, sets the directory to `0700` and the file to `0600`, then
+retries the connection. Concurrent attempts for the same key share one prompt.
+
+Known matching keys connect without a prompt. Changed keys and `@revoked`
+entries fail closed and are never replaced automatically. Use
+`ssh-keygen -R <host> -f <PI_CODING_AGENT_DIR>/ssh/known_hosts` only after
+independently verifying an intentional server-key rotation.
+
+Every OpenSSH command explicitly uses the persistent file,
+`/etc/ssh/ssh_known_hosts`, and `StrictHostKeyChecking=yes`. `ssh2` reads the
+same trust sources. A `ProxyJump` chain confirms each previously unknown hop
+in order before reaching the target.
+
+Automatic first-use confirmation requires OpenSSH configuration that `ssh2`
+can preflight. Advanced options such as arbitrary `ProxyCommand`,
+`KnownHostsCommand`, `CertificateFile`, `@cert-authority`, PKCS#11, and FIDO
+keys require manually provisioning the persistent file; the plugin never
+falls back to `StrictHostKeyChecking=no` or `accept-new`.
+
+In Kubernetes, a private key may remain on a read-only Secret volume with mode
+`0400` or `0600`, but `known_hosts` must be on writable persistent storage.
+Recommended layout:
+
+```text
+Secret (read-only): <PI_CODING_AGENT_DIR>/ssh/id_ed25519
+PVC (writable):     <PI_CODING_AGENT_DIR>/ssh/known_hosts
+```
+
+If the complete `ssh/` directory is a read-only Secret mount, fingerprint
+acceptance fails with an error instead of using an ephemeral trust file. Mount
+the directory from a PVC and mount the private-key Secret as an individual
+`subPath` when necessary.
 
 ### Password authentication
 
