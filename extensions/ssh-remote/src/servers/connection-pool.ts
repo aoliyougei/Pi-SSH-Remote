@@ -71,6 +71,28 @@ export class ServerConnectionPool {
 
   private key(server: SavedSshServer): string { return `${server.id}\0${server.updatedAt}`; }
 
+  async cachedPassword(server: SavedSshServer): Promise<string | undefined> {
+    const direct = this.passwordResolver.cachedPassword(openSshPasswordEndpoint(server.target, server.port));
+    if (direct !== undefined) return direct;
+    const executable = this.platform === "win32" ? "ssh.exe" : "ssh";
+    const args: string[] = [];
+    if (server.configFile) args.push("-F", server.configFile);
+    if (server.port !== undefined) args.push("-p", String(server.port));
+    args.push("-G", server.target);
+    try {
+      const result = await runLocalCommand(executable, args, 15_000);
+      if (result.exitCode !== 0) return undefined;
+      const config = parseOpenSshConfig(result.stdout.toString("utf8"));
+      const host = config.get("hostname")?.[0];
+      const username = config.get("user")?.[0];
+      const port = Number(config.get("port")?.[0] ?? 22);
+      if (host && username && Number.isInteger(port) && port >= 1 && port <= 65_535) {
+        return this.passwordResolver.cachedPassword({ hostLabel: `${username}@${host}:${port}`, username, host, port });
+      }
+    } catch {}
+    return undefined;
+  }
+
   async rememberPassword(server: SavedSshServer, password: string): Promise<void> {
     this.passwordResolver.rememberPassword(openSshPasswordEndpoint(server.target, server.port), password);
     const executable = this.platform === "win32" ? "ssh.exe" : "ssh";

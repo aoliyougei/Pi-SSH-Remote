@@ -81,6 +81,7 @@ import { RemoteMirrorFs } from "./sync/remote-tree.ts";
 import { buildSyncPlan, synchronizeMirror } from "./sync/synchronizer.ts";
 import { createAuthorizedMarker, validateMirrorRoot } from "./sync/marker.ts";
 import { RemoteExecController } from "./exec/controller.ts";
+import { runScpProcess, ScpController } from "./exec/scp.ts";
 import { registerRemoteExecutionTools, syncRemoteExecutionActiveTools } from "./exec/tools.ts";
 import { RemoteResourceController } from "./resources/controller.ts";
 import {
@@ -723,12 +724,23 @@ export function createSshRemoteExtension(
       getDefaultTimeout: () => config.execTimeoutSeconds,
       isFullRemoteWorkspace: () => runtime.kind !== "disabled",
     });
+    const scpController = new ScpController({
+      servers: serverController,
+      mappings: mappingController,
+      connections: savedServerConnections,
+      getDefaultServerId: () => config.defaultServerId,
+      knownHostsFile: knownHostsPath,
+      run: runScpProcess,
+      platform,
+      isFullRemoteWorkspace: () => runtime.kind !== "disabled",
+    });
     let remoteExecutionToolsRegistered = false;
     const ensureRemoteExecutionTools = (): void => {
       if (remoteExecutionToolsRegistered || serverController.list().length === 0) return;
       remoteExecutionToolsRegistered = true;
       registerRemoteExecutionTools(pi, {
         controller: remoteExecController,
+        scp: scpController,
         servers: serverController,
         mappings: mappingController,
         getMirrorQueue: (mapping) => localMirrors.getQueue(mapping),
@@ -2573,7 +2585,7 @@ export function createSshRemoteExtension(
             messages: [...messages, {
               role: "custom",
               customType: "ssh-remote-local-mirror",
-              content: `Local development workspace context (authoritative): file and search tools operate on the local project at ${mapping.localRoot}. Local changes are automatically mirrored to ${server.name}:${mapping.remoteRoot}; mirror state is ${status?.state ?? "unavailable"}. Proactively use ssh_exec for builds, tests, running code, deployment, and remote diagnostics without waiting for the user to remind you. ssh_exec waits for the latest verified mirror. Continue all code reading and modification with local tools. Do not use ssh_connect unless the user explicitly asks to enter a full remote workspace.`,
+              content: `Local development workspace context (authoritative): file and search tools operate on the local project at ${mapping.localRoot}. Local changes are automatically mirrored to ${server.name}:${mapping.remoteRoot}; mirror state is ${status?.state ?? "unavailable"}. Proactively use ssh_exec for builds, tests, running code, deployment, and remote diagnostics without waiting for the user to remind you. Use ssh_scp only when the user explicitly asks to upload or download files outside the project mirror flow. ssh_exec waits for the latest verified mirror. Continue all code reading and modification with local tools. Do not use ssh_connect unless the user explicitly asks to enter a full remote workspace.`,
               display: false,
               details: { kind: "local-mirror", server: server.name, remoteRoot: mapping.remoteRoot, state: status?.state },
               timestamp: Date.now(),

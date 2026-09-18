@@ -176,6 +176,8 @@ saved test server. This mode is separate from `/ssh-connect`:
   without changing Pi's workspace mode. For the mapped server it waits until
   the latest mirror is completely verified.
 - `ssh_sync` or `/ssh-sync` forces an immediate strict synchronization.
+- `ssh_scp` uploads or downloads explicitly requested files between the
+  trusted local project and a saved server without changing workspace mode.
 - `ssh_list_servers` lists non-sensitive saved-server metadata.
 
 Configure servers and mappings with:
@@ -197,8 +199,8 @@ Every new server explicitly selects **密码认证** or **密钥认证**:
 - Encrypted private keys are intentionally rejected. Use SSH Agent or an
   unencrypted dedicated deployment key instead.
 - OpenSSH and ssh2 both retain the selected authentication preference for
-  `/ssh test`, `ssh_exec`, `ssh_sync`, and later connections. Existing server
-  records without the new fields continue in `auto` mode.
+  `/ssh test`, `ssh_exec`, `ssh_scp`, `ssh_sync`, and later connections.
+  Existing server records without the new fields continue in `auto` mode.
 
 GitLab and GitHub SSH endpoints usually provide Git protocol access rather
 than a normal remote shell. They can be used by `git` through OpenSSH config,
@@ -242,6 +244,19 @@ SSH transport plus POSIX `sh` on Unix or PowerShell on Windows. It does not
 require SFTP, rsync, tar, Git, Node.js, or Python on the remote host. Full
 content verification reads non-protected remote files and computes hashes
 locally, so very large repositories should configure appropriate exclusions.
+
+`ssh_scp` accepts `upload` or `download`, optional `server`, local and remote
+paths, optional `recursive`, and an optional timeout. The local path must stay
+inside the current trusted project, including after resolving symbolic links.
+Directories require `recursive=true`. The tool invokes the installed OpenSSH
+`scp` executable directly without a local shell. Modern OpenSSH uses SFTP by
+default; for compatibility with older clients, remote paths are also limited
+to an ASCII safe-character set and cannot contain whitespace, wildcards, or
+Shell metacharacters. It reuses
+saved aliases, ports, identities, ProxyJump, cached passwords, and the
+persistent strict `known_hosts` policy. Password-based SCP requires `sshpass`;
+passwords are passed only through `SSHPASS`, never command arguments. Progress,
+resume, wildcards, and remote-to-remote copies are intentionally unsupported.
 
 Use `/ssh-connect` when the entire Pi workspace should move to a remote host.
 That pauses the local mirror and keeps all existing remote-workspace behavior;

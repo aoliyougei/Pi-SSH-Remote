@@ -72,7 +72,7 @@ export function registerSshRemoteSettings(
     }, {
       id: "remoteExecutionTools",
       label: "远程执行工具",
-      description: "存在已保存服务器和项目映射时启用 ssh_exec、ssh_sync 和 ssh_list_servers",
+      description: "存在已保存服务器和项目映射时启用 ssh_exec、ssh_scp、ssh_sync 和 ssh_list_servers",
       currentValue: booleanLabel(controller.getConfig().remoteExecutionTools),
       values: ["开启", "关闭"],
     }, {

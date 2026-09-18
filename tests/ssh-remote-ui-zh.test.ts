@@ -21,5 +21,6 @@ test("SSH Remote user-facing dialogs and settings are Chinese while technical ID
   assert.match(resources, /远端项目资源/);
   assert.match(tools, /已保存的 SSH 服务器/);
   assert.match(tools, /name: "ssh_exec"/);
+  assert.match(tools, /name: "ssh_scp"/);
   assert.match(extension, /registerCommand\("ssh-connect"/);
 });

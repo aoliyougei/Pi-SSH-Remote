@@ -5,14 +5,16 @@ import type { MappingController } from "../mappings/controller.ts";
 import type { MirrorQueue } from "../sync/queue.ts";
 import type { ServerController } from "../servers/controller.ts";
 import type { RemoteExecController } from "./controller.ts";
+import type { ScpController } from "./scp.ts";
 
-const TOOL_NAMES = new Set(["ssh_list_servers", "ssh_exec", "ssh_sync"]);
+const TOOL_NAMES = new Set(["ssh_list_servers", "ssh_exec", "ssh_sync", "ssh_scp"]);
 export interface RemoteExecutionToolState { enabled: boolean; trusted: boolean; fullRemote: boolean; hasServers: boolean; hasMapping: boolean }
 
 export function syncRemoteExecutionActiveTools(pi: ExtensionAPI, state: RemoteExecutionToolState): void {
   const base = pi.getActiveTools().filter((name) => !TOOL_NAMES.has(name));
   const next = [...base];
   if (state.enabled && state.hasServers) next.push("ssh_list_servers", "ssh_exec");
+  if (state.enabled && state.hasServers && state.trusted && !state.fullRemote) next.push("ssh_scp");
   if (state.enabled && state.hasMapping && state.trusted && !state.fullRemote) next.push("ssh_sync");
   const current = pi.getActiveTools();
   if (current.length !== next.length || current.some((value, index) => value !== next[index])) pi.setActiveTools(next);
@@ -20,6 +22,7 @@ export function syncRemoteExecutionActiveTools(pi: ExtensionAPI, state: RemoteEx
 
 export interface RemoteExecutionToolDependencies {
   controller: RemoteExecController;
+  scp: ScpController;
   servers: ServerController;
   mappings: MappingController;
   getMirrorQueue(mapping: LocalProjectMapping): MirrorQueue | undefined;
@@ -55,6 +58,27 @@ export function registerRemoteExecutionTools(pi: ExtensionAPI, dependencies: Rem
     ],
     parameters: Type.Object({ server: Type.Optional(Type.String()), command: Type.String({ minLength: 1 }), cwd: Type.Optional(Type.String()), timeout: Type.Optional(Type.Number({ minimum: 1, maximum: 86_400 })), require_synced: Type.Optional(Type.Boolean()) }),
     async execute(_id, params, signal, onUpdate, ctx) { return dependencies.controller.execute(params, ctx, signal, onUpdate); },
+  });
+  pi.registerTool({
+    name: "ssh_scp", label: "SSH 文件传输",
+    description: "通过已保存的 SSH 服务器在当前受信任项目与远端之间上传或下载文件和目录。",
+    promptSnippet: "通过 SCP 在当前项目与已保存 SSH 服务器之间传输文件",
+    promptGuidelines: [
+      "仅在用户明确要求上传或下载文件时使用 ssh_scp。",
+      "local_path 必须位于当前受信任项目内；目录传输必须显式设置 recursive=true。",
+      "ssh_scp 不会切换工作区，也不会替代严格项目镜像同步。",
+    ],
+    parameters: Type.Object({
+      action: Type.Union([Type.Literal("upload"), Type.Literal("download")]),
+      server: Type.Optional(Type.String()),
+      local_path: Type.String({ minLength: 1 }),
+      remote_path: Type.String({ minLength: 1 }),
+      recursive: Type.Optional(Type.Boolean()),
+      timeout: Type.Optional(Type.Number({ minimum: 1, maximum: 86_400 })),
+    }),
+    async execute(_id, params, signal, _onUpdate, ctx) {
+      return dependencies.scp.execute(params, ctx, signal);
+    },
   });
   pi.registerTool({
     name: "ssh_sync", label: "SSH 同步",
