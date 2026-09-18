@@ -83,7 +83,12 @@ export type ScpRunner = (invocation: ScpInvocation, options: { signal?: AbortSig
 export function runScpProcess(invocation: ScpInvocation, options: { signal?: AbortSignal; timeoutSeconds: number }): Promise<ScpRunnerResult> {
   if (!Number.isFinite(options.timeoutSeconds) || options.timeoutSeconds <= 0) throw new Error("SCP timeout must be positive");
   return new Promise((resolve, reject) => {
-    const child = spawn(invocation.executable, invocation.args, { env: invocation.env, stdio: ["ignore", "ignore", "pipe"], windowsHide: true });
+    const child = spawn(invocation.executable, invocation.args, {
+      env: invocation.env,
+      stdio: ["ignore", "ignore", "pipe"],
+      windowsHide: true,
+      detached: process.platform !== "win32",
+    });
     let settled = false;
     let stderr = Buffer.alloc(0);
     const finish = (action: () => void): void => {
@@ -93,13 +98,22 @@ export function runScpProcess(invocation: ScpInvocation, options: { signal?: Abo
       options.signal?.removeEventListener("abort", abort);
       action();
     };
+    const killTree = (): void => {
+      if (process.platform === "win32" && child.pid) {
+        const killer = spawn("taskkill", ["/PID", String(child.pid), "/T", "/F"], { stdio: "ignore", windowsHide: true });
+        killer.unref();
+        return;
+      }
+      try { if (child.pid) process.kill(-child.pid, "SIGKILL"); }
+      catch { child.kill("SIGKILL"); }
+    };
     const abort = (): void => {
-      child.kill("SIGKILL");
+      killTree();
       const reason = options.signal?.reason;
       finish(() => reject(reason instanceof Error ? reason : new Error("SCP 传输已取消")));
     };
     const timer = setTimeout(() => {
-      child.kill("SIGKILL");
+      killTree();
       finish(() => reject(new Error(`SCP 传输在 ${options.timeoutSeconds} 秒后超时`)));
     }, options.timeoutSeconds * 1_000);
     timer.unref?.();

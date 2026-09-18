@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
@@ -78,6 +78,39 @@ test("scp process runner returns failures and enforces cancellation and timeout"
   await assert.rejects(cancelled, /cancelled by test/);
 
   await assert.rejects(runScpProcess({ executable: process.execPath, args: ["-e", "setInterval(() => {}, 1000)"], env: process.env }, { timeoutSeconds: 0.01 }), /超时/);
+});
+
+test("scp cancellation terminates wrapper descendants", { skip: process.platform !== "linux" }, async () => {
+  const root = mkdtempSync(join(tmpdir(), "ssh-scp-process-tree-"));
+  const pidFile = join(root, "child.pid");
+  const wrapper = [
+    "const {spawn}=require('node:child_process');",
+    `const child=spawn(process.execPath,['-e','setInterval(()=>{},1000)'],{stdio:'ignore'});`,
+    `require('node:fs').writeFileSync(${JSON.stringify(pidFile)},String(child.pid));`,
+    "setInterval(()=>{},1000);",
+  ].join("");
+  const controller = new AbortController();
+  let childPid = 0;
+  try {
+    const running = runScpProcess({ executable: process.execPath, args: ["-e", wrapper], env: process.env }, { timeoutSeconds: 5, signal: controller.signal });
+    for (let attempt = 0; attempt < 100 && !existsSync(pidFile); attempt++) await new Promise((resolve) => setTimeout(resolve, 5));
+    assert.equal(existsSync(pidFile), true);
+    childPid = Number(readFileSync(pidFile, "utf8"));
+    controller.abort(new Error("stop tree"));
+    await assert.rejects(running, /stop tree/);
+    let alive = true;
+    for (let attempt = 0; attempt < 100; attempt++) {
+      try {
+        process.kill(childPid, 0);
+        if (readFileSync(`/proc/${childPid}/stat`, "utf8").split(" ")[2] === "Z") { alive = false; break; }
+      } catch { alive = false; break; }
+      await new Promise((resolve) => setTimeout(resolve, 5));
+    }
+    assert.equal(alive, false);
+  } finally {
+    if (childPid) try { process.kill(childPid, "SIGKILL"); } catch {}
+    rmSync(root, { recursive: true, force: true });
+  }
 });
 
 test("ssh_scp is active only for trusted local projects and delegates transfers", async () => {
