@@ -1,7 +1,7 @@
 {
   "name": "pi-extensions-workspace",
   "private": true,
-  "version": "0.9.0",
+  "version": "0.9.1",
   "packageManager": "bun@1.3.14",
   "description": "Bun workspace for independently published Pi extensions",
   "type": "module",
