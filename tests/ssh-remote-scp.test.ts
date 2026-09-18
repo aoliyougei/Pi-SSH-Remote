@@ -80,6 +80,63 @@ test("scp process runner returns failures and enforces cancellation and timeout"
   await assert.rejects(runScpProcess({ executable: process.execPath, args: ["-e", "setInterval(() => {}, 1000)"], env: process.env }, { timeoutSeconds: 0.01 }), /超时/);
 });
 
+test("scp falls back to a temporary SSH_ASKPASS helper when sshpass is missing", { skip: process.platform === "win32" }, async () => {
+  const root = mkdtempSync(join(tmpdir(), "ssh-scp-askpass-"));
+  const resultFile = join(root, "result.json");
+  const password = "p@ss '$% \\ word";
+  const fakeScp = [
+    "const {spawnSync}=require('node:child_process');",
+    "const {readFileSync,statSync,writeFileSync}=require('node:fs');",
+    "const helper=process.env.SSH_ASKPASS;",
+    "const answer=spawnSync(helper,['Password:'],{env:process.env,encoding:'utf8'});",
+    `writeFileSync(${JSON.stringify(resultFile)},JSON.stringify({password:answer.stdout.replace(/\\n$/, ''),helper,source:readFileSync(helper,'utf8'),mode:statSync(helper).mode&0o777}));`,
+  ].join("");
+  try {
+    const invocation = {
+      executable: "sshpass",
+      args: ["-e", process.execPath, "-e", fakeScp],
+      env: { ...process.env, PATH: "", SSHPASS: password },
+    };
+    const result = await runScpProcess(invocation, { timeoutSeconds: 5 });
+    assert.equal(result.exitCode, 0);
+    const observed = JSON.parse(readFileSync(resultFile, "utf8"));
+    assert.equal(observed.password, password);
+    assert.equal(observed.source.includes(password), false);
+    assert.equal(observed.mode, 0o700);
+    assert.equal(existsSync(observed.helper), false);
+  } finally { rmSync(root, { recursive: true, force: true }); }
+});
+
+test("SSH_ASKPASS helper is removed after cancellation", { skip: process.platform === "win32" }, async () => {
+  const root = mkdtempSync(join(tmpdir(), "ssh-scp-askpass-cancel-"));
+  const helperFile = join(root, "helper.txt");
+  const fakeScp = [
+    "const {spawnSync}=require('node:child_process');",
+    "const {writeFileSync}=require('node:fs');",
+    "spawnSync(process.env.SSH_ASKPASS,['Password:'],{env:process.env});",
+    `writeFileSync(${JSON.stringify(helperFile)},process.env.SSH_ASKPASS);`,
+    "setInterval(()=>{},1000);",
+  ].join("");
+  const controller = new AbortController();
+  try {
+    const running = runScpProcess({ executable: "sshpass", args: ["-e", process.execPath, "-e", fakeScp], env: { ...process.env, PATH: "", SSHPASS: "secret" } }, { timeoutSeconds: 5, signal: controller.signal });
+    for (let attempt = 0; attempt < 100 && !existsSync(helperFile); attempt++) await new Promise((resolve) => setTimeout(resolve, 5));
+    assert.equal(existsSync(helperFile), true);
+    const helper = readFileSync(helperFile, "utf8");
+    controller.abort(new Error("cancel askpass"));
+    await assert.rejects(running, /cancel askpass/);
+    assert.equal(existsSync(helper), false);
+  } finally { rmSync(root, { recursive: true, force: true }); }
+});
+
+test("Windows reports a clear error when sshpass.exe is missing", async () => {
+  await assert.rejects(runScpProcess({
+    executable: "sshpass.exe",
+    args: ["-e", "scp.exe", "source", "target"],
+    env: { ...process.env, PATH: "" },
+  }, { timeoutSeconds: 5, platform: "win32" }), /缺少 sshpass\.exe.*密码认证无法继续/);
+});
+
 test("scp cancellation terminates wrapper descendants", { skip: process.platform !== "linux" }, async () => {
   const root = mkdtempSync(join(tmpdir(), "ssh-scp-process-tree-"));
   const pidFile = join(root, "child.pid");

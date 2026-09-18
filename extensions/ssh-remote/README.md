@@ -254,9 +254,13 @@ default; for compatibility with older clients, remote paths are also limited
 to an ASCII safe-character set and cannot contain whitespace, wildcards, or
 Shell metacharacters. It reuses
 saved aliases, ports, identities, ProxyJump, cached passwords, and the
-persistent strict `known_hosts` policy. Password-based SCP requires `sshpass`;
-passwords are passed only through `SSHPASS`, never command arguments. Progress,
-resume, wildcards, and remote-to-remote copies are intentionally unsupported.
+persistent strict `known_hosts` policy. Passwords are passed only through
+environment variables, never command arguments. On Linux and macOS, an
+installed `sshpass` is used when available; otherwise SSH Remote creates a
+restricted temporary `SSH_ASKPASS` helper that contains no password and is
+removed after success, failure, cancellation, or timeout. Native Windows
+password-based SCP still requires `sshpass.exe`. Progress, resume, wildcards,
+and remote-to-remote copies are intentionally unsupported.
 
 Use `/ssh-connect` when the entire Pi workspace should move to a remote host.
 That pauses the local mirror and keeps all existing remote-workspace behavior;

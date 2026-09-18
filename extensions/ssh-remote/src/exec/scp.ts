@@ -1,6 +1,7 @@
 import { spawn } from "node:child_process";
-import { existsSync, lstatSync, readdirSync, realpathSync, statSync } from "node:fs";
-import { dirname, isAbsolute, relative, resolve } from "node:path";
+import { existsSync, lstatSync, mkdtempSync, readdirSync, realpathSync, rmSync, statSync, writeFileSync } from "node:fs";
+import { dirname, isAbsolute, join, relative, resolve } from "node:path";
+import { tmpdir } from "node:os";
 import type { AgentToolResult, ExtensionContext } from "@earendil-works/pi-coding-agent";
 import type { MappingController } from "../mappings/controller.ts";
 import type { ServerConnectionPool } from "../servers/connection-pool.ts";
@@ -78,10 +79,10 @@ export interface ScpDetails {
 }
 
 export interface ScpRunnerResult { exitCode: number | null; stderr: Buffer }
-export type ScpRunner = (invocation: ScpInvocation, options: { signal?: AbortSignal; timeoutSeconds: number }) => Promise<ScpRunnerResult>;
+export interface ScpRunOptions { signal?: AbortSignal; timeoutSeconds: number; platform?: NodeJS.Platform }
+export type ScpRunner = (invocation: ScpInvocation, options: ScpRunOptions) => Promise<ScpRunnerResult>;
 
-export function runScpProcess(invocation: ScpInvocation, options: { signal?: AbortSignal; timeoutSeconds: number }): Promise<ScpRunnerResult> {
-  if (!Number.isFinite(options.timeoutSeconds) || options.timeoutSeconds <= 0) throw new Error("SCP timeout must be positive");
+function runScpChild(invocation: ScpInvocation, options: ScpRunOptions): Promise<ScpRunnerResult> {
   return new Promise((resolve, reject) => {
     const child = spawn(invocation.executable, invocation.args, {
       env: invocation.env,
@@ -126,6 +127,36 @@ export function runScpProcess(invocation: ScpInvocation, options: { signal?: Abo
     if (options.signal?.aborted) abort();
     else options.signal?.addEventListener("abort", abort, { once: true });
   });
+}
+
+export async function runScpProcess(invocation: ScpInvocation, options: ScpRunOptions): Promise<ScpRunnerResult> {
+  if (!Number.isFinite(options.timeoutSeconds) || options.timeoutSeconds <= 0) throw new Error("SCP timeout must be positive");
+  try {
+    return await runScpChild(invocation, options);
+  } catch (error) {
+    const missingSshpass = (error as NodeJS.ErrnoException).code === "ENOENT"
+      && /(?:^|[\\/])sshpass(?:\.exe)?$/i.test(invocation.executable)
+      && invocation.args[0] === "-e";
+    if (!missingSshpass) throw error;
+    if ((options.platform ?? process.platform) === "win32") throw new Error("当前环境缺少 sshpass.exe，Windows SCP 密码认证无法继续", { cause: error });
+    const directory = mkdtempSync(join(tmpdir(), "pi-ssh-askpass-"));
+    const helper = join(directory, "askpass");
+    try {
+      writeFileSync(helper, "#!/bin/sh\nprintf '%s' \"$SSHPASS\"\n", { mode: 0o700 });
+      return await runScpChild({
+        executable: invocation.args[1],
+        args: invocation.args.slice(2),
+        env: {
+          ...invocation.env,
+          SSH_ASKPASS: helper,
+          SSH_ASKPASS_REQUIRE: "force",
+          DISPLAY: invocation.env.DISPLAY || "pi-ssh-askpass:0",
+        },
+      }, options);
+    } finally {
+      rmSync(directory, { recursive: true, force: true });
+    }
+  }
 }
 
 export interface ScpControllerOptions {
