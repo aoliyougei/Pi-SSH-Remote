@@ -4877,6 +4877,51 @@ test("extension routes @ completion to SSH and restores Pi completion on exit", 
   assert.equal(harness.autocompleteFactories.length, 1, "session changes must not stack wrappers");
 });
 
+test("trusted local sessions expose ssh_scp without a mirror mapping", async () => {
+  const directory = mkdtempSync(join(tmpdir(), "pi-ssh-scp-visible-"));
+  const previousAgentDir = process.env.PI_CODING_AGENT_DIR;
+  process.env.PI_CODING_AGENT_DIR = directory;
+  writeFileSync(join(directory, "ssh-remote-servers.json"), JSON.stringify({
+    version: 1,
+    servers: [{
+      version: 1,
+      id: "server-1",
+      name: "devbox",
+      target: "deploy@devbox",
+      authenticationPreference: "auto",
+      shellPreference: "auto",
+      transportPreference: "auto",
+      createdAt: "2026-01-01T00:00:00.000Z",
+      updatedAt: "2026-01-01T00:00:00.000Z",
+    }],
+  }));
+  try {
+    const harness = createExtensionHarness();
+    createSshRemoteExtension({ platform: "linux" })(harness.pi);
+    await harness.emit("session_start", { reason: "startup" });
+    assert.ok(harness.getActiveTools().includes("ssh_scp"));
+    assert.equal(harness.getActiveTools().includes("ssh_sync"), false);
+    await harness.emit("session_tree", {}, { ...harness.ctx, isProjectTrusted: () => false } as ExtensionContext);
+    assert.equal(harness.getActiveTools().includes("ssh_scp"), false);
+    await harness.emit("session_tree", {}, harness.ctx);
+    assert.ok(harness.getActiveTools().includes("ssh_scp"));
+
+    const remote = createExtensionHarness({ flag: "devbox" });
+    const client = new FakeSshClient({ target: "devbox" });
+    createSshRemoteExtension({
+      platform: "linux",
+      createClient: () => client,
+      selectRemote: async () => ({ adapter: new UnixBashAdapter(client), workspace: { platform: "unix", shell: "bash", home: "/home/deploy", cwd: "/home/deploy" } }),
+    })(remote.pi);
+    await remote.emit("session_start", { reason: "startup" });
+    assert.equal(remote.getActiveTools().includes("ssh_scp"), false);
+  } finally {
+    if (previousAgentDir === undefined) delete process.env.PI_CODING_AGENT_DIR;
+    else process.env.PI_CODING_AGENT_DIR = previousAgentDir;
+    rmSync(directory, { recursive: true, force: true });
+  }
+});
+
 test("SSH commands stay available while local sessions keep AI controls disabled", async () => {
   const harness = createExtensionHarness();
   createSshRemoteExtension({ platform: "linux" })(harness.pi);

@@ -618,7 +618,7 @@ export function createSshRemoteExtension(
       throw new Error("AI SSH password prompt timeout must be a positive number");
     }
     let syncAiControlTools = (): void => {};
-    let syncRemoteTools = (): void => {};
+    let syncRemoteTools = (_ctx?: ExtensionContext): void => {};
     registerSshRemoteSettings(pi, {
       getConfig: () => config,
       updateConfig: (next, ctx) => {
@@ -628,7 +628,7 @@ export function createSshRemoteExtension(
         try {
           saveConfig(config);
           syncAiControlTools();
-          syncRemoteTools();
+          syncRemoteTools(ctx);
           if (previous.transport !== config.transport) {
             ctx.ui.notify(
               "SSH 传输方式已保存；请使用 /ssh-reconnect 应用到当前工作区",
@@ -772,7 +772,7 @@ export function createSshRemoteExtension(
           mappingController.add(candidate);
         } finally { await lease.release(); }
         await localMirrors.activate(ctx, "mapping-created");
-        syncRemoteTools();
+        syncRemoteTools(ctx);
       },
       replaceMapping: async (current, candidate, ctx) => {
         if (!ctx.isProjectTrusted()) throw new Error("当前项目不受信任，不能修改项目镜像");
@@ -802,7 +802,7 @@ export function createSshRemoteExtension(
         } finally { await lease?.release(); }
         if (committed) {
           await localMirrors.activate(ctx, "mapping-created");
-          syncRemoteTools();
+          syncRemoteTools(ctx);
         }
       },
       removeMapping: async (mapping, ctx) => {
@@ -812,7 +812,7 @@ export function createSshRemoteExtension(
         syncRemoteExecutionActiveTools(pi, { enabled: config.remoteExecutionTools, trusted: ctx.isProjectTrusted(), fullRemote: false, hasServers: serverController.list().length > 0, hasMapping: false });
       },
       pauseMapping: async (mapping, ctx) => { await localMirrors.pause(); await mappingController.pause(mapping.id); ctx.ui.notify("项目镜像已暂停", "info"); },
-      resumeMapping: async (mapping, ctx) => { await mappingController.resume(mapping.id); await localMirrors.activate(ctx, "mapping-resumed"); syncRemoteTools(); },
+      resumeMapping: async (mapping, ctx) => { await mappingController.resume(mapping.id); await localMirrors.activate(ctx, "mapping-resumed"); syncRemoteTools(ctx); },
       onServersChanged: () => { ensureRemoteExecutionTools(); syncRemoteTools(); },
       syncMapping: async (ctx) => {
         const mapping = mappingController.find(ctx.cwd);
@@ -1059,6 +1059,7 @@ export function createSshRemoteExtension(
         && (source === "command" || source === "tool");
       const aiPasswordAuthDisabled = source === "tool" && !config.aiPasswordAuth;
       runtime = { kind: "connecting", intent };
+      syncRemoteTools(ctx);
       updateStatus(ctx);
       emitEnvironmentEvent({
         action: "connect",
@@ -1386,7 +1387,7 @@ export function createSshRemoteExtension(
       }
       runtime = { kind: "disabled" };
       await localMirrors.resume(ctx);
-      syncRemoteTools();
+      syncRemoteTools(ctx);
       // The named provider remains registered and now falls through locally.
       // Re-emitting on a later connect refreshes protocol acknowledgement after
       // an extension reload.
@@ -2377,11 +2378,13 @@ export function createSshRemoteExtension(
       }
     };
 
-    syncRemoteTools = (): void => {
+    let remoteToolsContext: ExtensionContext | undefined;
+    syncRemoteTools = (ctx?: ExtensionContext): void => {
+      if (ctx) remoteToolsContext = ctx;
       ensureRemoteExecutionTools();
       if (!remoteExecutionToolsRegistered) return;
-      const mapping = runtime.kind === "disabled" ? mappingController.find(localMirrors.current?.ctx.cwd ?? process.cwd()) : undefined;
-      const trusted = localMirrors.current?.ctx.isProjectTrusted() ?? false;
+      const mapping = runtime.kind === "disabled" && remoteToolsContext ? mappingController.find(remoteToolsContext.cwd) : undefined;
+      const trusted = remoteToolsContext?.isProjectTrusted() ?? false;
       syncRemoteExecutionActiveTools(pi, {
         enabled: config.remoteExecutionTools,
         trusted,
@@ -2408,10 +2411,10 @@ export function createSshRemoteExtension(
       if (!intent) {
         updateStatus(ctx);
         await localMirrors.activate(ctx, event.reason === "reload" ? "reload" : event.reason === "resume" ? "resume" : "startup");
-        syncRemoteTools();
+        syncRemoteTools(ctx);
         return;
       }
-      syncRemoteTools();
+      syncRemoteTools(ctx);
       ensureRemoteRouting(ctx);
       await connect(
         intent,
@@ -2450,6 +2453,8 @@ export function createSshRemoteExtension(
         }
         if (runtime.kind !== "disabled") {
           await disconnect(ctx, "tree", { persist: false });
+        } else {
+          syncRemoteTools(ctx);
         }
       } catch (error) {
         ctx.ui.notify(
